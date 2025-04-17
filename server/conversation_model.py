@@ -2,6 +2,7 @@
 # Kernel - base (Python 3.12.7)
 # !pip install google-genai
 # !pip install keyboard
+# !pip install dotenv
 import os
 import keyboard
 import json
