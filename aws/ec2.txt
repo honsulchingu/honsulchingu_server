@@ -10,11 +10,11 @@ sudo apt upgrade
 sudo apt list --upgradable
 
 sudo apt install python3-pip
-pip3 install uvicorn --break-system-packages
 pip3 install fastapi --break-system-packages
-pip3 install keyboard --break-system-packages
+pip3 install uvicorn --break-system-packages
+
 pip3 install google-genai --break-system-packages
-pip3 install dotenv --break-system-packages
+
 
 cd server
 python3 server.py

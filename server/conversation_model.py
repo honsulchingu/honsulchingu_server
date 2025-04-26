@@ -1,145 +1,164 @@
 # %%
 # Kernel - base (Python 3.12.7)
 # !pip install google-genai
-# !pip install keyboard
-# !pip install dotenv
-import os
-import keyboard
-import json
+# !pip install ujson
+from os             import environ, path
 from google         import genai
 from google.genai   import types
 from dotenv         import load_dotenv
+from ujson          import dump, load
+from datetime       import datetime
 
-# api key 불러오기
-load_dotenv()
-
-# prompt.txt 불러오기
-with open("prompt.txt", "r", encoding="utf-8") as f:
-    prompt_txt = f.read()
-
-# model 설정하기
-def init_model():
-    client = genai.Client(
-        api_key=os.environ.get("GEMINI_API_KEY"),
-    )
-
+# setting 설정하기
+def init_setting():
+    client = genai.Client(api_key=environ.get("GEMINI_API_KEY"))
     model = "gemma-3-27b-it"
+    generate_content_config = types.GenerateContentConfig(response_mime_type="text/plain")
 
-    contents = []
+    return client, model, generate_content_config
 
-    generate_content_config = types.GenerateContentConfig(
-        response_mime_type="text/plain",
-    )
+# contents 설정하기
+def init_contents(client, model, generate_content_config, prompt_name):
+    with open(prompt_name, 'r', encoding="utf-8") as file:
+        prompt_txt = file.read()
 
-    contents = response_generate(client,model, contents, generate_content_config, prompt_txt)
+    contents_with_time = []
+    contents_with_time = response_generate(client, model, generate_content_config, contents_with_time, prompt_txt)
 
-    return client, model, contents, generate_content_config
+    return contents_with_time
 
 # response 생성하기
-def response_generate(client, model, contents, generate_content_config, input_user):
-    contents.append(
-        types.Content(
-            role="user",
-            parts=[
-                types.Part.from_text(text=input_user),
-            ],
-        ),
+def response_generate(client, model, generate_content_config, contents_with_time, input_user):
+    contents_with_time.append(
+        (
+            types.Content(
+                role = "user",
+                
+                parts = [types.Part.from_text(text=input_user)]
+            ),
+            datetime.now().strftime("%Y. %m. %d. %H-%M-%S")
+        )
     )
 
     response = ""
 
     for chunk in client.models.generate_content_stream(
-        model=model,
-        contents=contents,
-        config=generate_content_config,
+        model = model,
+        contents = [content for content, _ in contents_with_time],
+        config = generate_content_config
     ):
         if chunk.text is not None:
             print(chunk.text, end="")
             response += chunk.text
     
-    contents.append(
-        types.Content(
-            role="model",
-            parts=[
-                types.Part.from_text(text=response),
-            ],
-        ),
+    contents_with_time.append(
+        (
+            types.Content(
+                role = "model",
+                
+                parts = [types.Part.from_text(text=response)]
+            ),
+            datetime.now().strftime("%Y. %m. %d. %H-%M-%S")
+        )
     )
 
-    return contents
+    return contents_with_time
 
-# model 저장하기
-def save_all_to_json(model, contents, generate_content_config, filename="state.json"):
+# setting 저장하기 (json)
+def save_setting_to_json(model, generate_content_config, file_name):
     data = {
         "model": model,
+        
+        "generate_content_config": {"response_mime_type": generate_content_config.response_mime_type}
+    }
+    data["api_key"] = environ.get("GEMINI_API_KEY")
+    
+    with open(file_name, 'w', encoding="utf-8") as file:
+        dump(data, file, ensure_ascii=False, indent=4)
 
-        "contents": [],
-
-        "generate_content_config": {
-            "response_mime_type": generate_content_config.response_mime_type,
-        },
+# contents 저장하기 (json)
+def save_contents_to_json(contents_with_time, file_name):
+    data = {
+        "contents": []
     }
 
-    data["api_key"] = os.environ.get("GEMINI_API_KEY")
-
-    for content in contents:
+    for content, time in contents_with_time:
         content_data = {
             "role": content.role,
-            "parts": [{"text": part.text.strip()} for part in content.parts]
+            "parts": [{"text": part.text.strip()} for part in content.parts],
+            "time": time
         }
         data["contents"].append(content_data)
 
-    with open(filename, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    with open(file_name, 'w', encoding="utf-8") as file:
+        dump(data, file, ensure_ascii=False, indent=4)
 
-# model 불러오기
-def load_all_from_json(filename="state.json"):
-    if not os.path.exists(filename):
-        return None, None, None, None
+# setting 불러오기 (json)
+def load_setting_from_json(file_name):
+    if not path.exists(file_name):
+        return None, None, None
 
-    with open(filename, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    with open(file_name, 'r', encoding="utf-8") as file:
+        data = load(file)
 
     client = genai.Client(api_key=data["api_key"])
-
     model = data["model"]
+    generate_content_config = types.GenerateContentConfig(response_mime_type=data["generate_content_config"]["response_mime_type"])
 
-    contents = [
-        types.Content(
-            role=content["role"],
-            parts=[types.Part.from_text(text=part["text"]) for part in content["parts"]]
+    return client, model, generate_content_config
+
+# contents 불러오기 (json)
+def load_contents_from_json(file_name):
+    if not path.exists(file_name):
+        return None
+
+    with open(file_name, 'r', encoding="utf-8") as file:
+        data = load(file)
+
+    contents_with_time = [
+        (
+            types.Content(
+                role = content["role"],
+                
+                parts = [types.Part.from_text(text=part["text"]) for part in content["parts"]]
+            ),
+            content["time"]
         )
         for content in data["contents"]
     ]
 
-    generate_content_config = types.GenerateContentConfig(
-        response_mime_type=data["generate_content_config"]["response_mime_type"]
-    )
-
-    return client, model, contents, generate_content_config
+    return contents_with_time
 
 # model 실행하기
 if __name__ == "__main__":
-    client, model, contents, generate_content_config = load_all_from_json(filename="state.json")
+    # !pip install keyboard
+    from keyboard       import is_pressed
 
-    if not all([client, model, contents, generate_content_config]):
-        client, model, contents, generate_content_config = init_model()
-
+    load_dotenv()
+    
+    client, model, generate_content_config = load_setting_from_json("setting.json")
+    contents = load_contents_from_json("contents.json")
+    
+    if not all([client, model, generate_content_config, contents]):
+        client, model, generate_content_config = init_setting()
+        contents = init_contents(client, model, generate_content_config, "prompt.txt")
+    
     while True:
         input_user = input()
-
-        if keyboard.is_pressed("esc"):
-            save_all_to_json(model, contents, generate_content_config, filename="state.json")
+        
+        if is_pressed("esc"):
+            save_setting_to_json(model, generate_content_config, "setting.json")
+            save_contents_to_json(contents, "contents.json")
             break
-
+        
         print("\n나: " + input_user, end="\n")
         print("AI: ", end="")
-        contents = response_generate(client, model, contents, generate_content_config, input_user)
-
+        contents = response_generate(client, model, generate_content_config, contents, input_user)
+        
         print("\n\n=== contents 출력 시작 ===")
-        for i, c in enumerate(contents):
-            print(f"\n[{i}] role: {c.role}")
-            for part in c.parts:
+        for i, (content, time) in enumerate(contents):
+            print(f"\n[{i}] role: {content.role} ({time})")
+            for part in content.parts:
                 print(f"{part.text[:100]}")
         print("\n=== contents 출력 종료 ===")
 
