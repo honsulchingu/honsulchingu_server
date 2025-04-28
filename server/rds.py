@@ -33,13 +33,14 @@ def save_contents_to_db(connection, cursor, id_user, select_user, file_name, tab
         role = content["role"]
         text = content["parts"][0]["text"]
         time = content["time"]
-        cursor.execute(f"INSERT INTO {table_name} (id_user, select_user, role, text, time, start) VALUES (%s, %s, %s, %s, %s, %s)", (id_user, select_user, role, text, time, start))
+        shown = content["shown"]
+        cursor.execute(f"INSERT INTO {table_name} (id_user, select_user, role, text, time, start, shown) VALUES (%s, %s, %s, %s, %s, %s, %s)", (id_user, select_user, role, text, time, start, shown))
 
     connection.commit()
 
 # contents 불러오기 (db)
 def load_contents_from_db(cursor, id_user, select_user, start, table_name):
-    cursor.execute(f"SELECT role, text, time FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start))
+    cursor.execute(f"SELECT role, text, time, shown FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start))
     rows = cursor.fetchall()
 
     contents_with_time = [
@@ -49,7 +50,9 @@ def load_contents_from_db(cursor, id_user, select_user, start, table_name):
                 
                 parts = [types.Part.from_text(text=row[1])]
             ),
-            row[2]
+            row[2],
+
+            row[3]
         )
         for row in rows
     ]
@@ -74,8 +77,8 @@ if __name__ == "__main__":
     if choice == 1:
         save_contents_to_db(connection, cursor, "alps1248@gmail.com", "민혁", "contents.json", "contents_table")
     else:
-        contents = load_contents_from_db(cursor, "alps1248@gmail.com", "민혁", "2025. 04. 26. 22-04-57", "contents_table")
-        save_contents_to_json(contents, f"contents_alps1248@gmail.com_민혁_2025. 04. 26. 22-04-57")
+        contents = load_contents_from_db(cursor, "alps1248@gmail.com", "민혁", "2025. 04. 28. 20-22-31", "contents_table")
+        save_contents_to_json(contents, f"contents_alps1248@gmail.com_민혁_2025. 04. 28. 20-22-31")
 
     close_db(connection, cursor)
 

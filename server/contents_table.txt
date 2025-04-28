@@ -5,7 +5,8 @@ CREATE TABLE contents_table (
     role        VARCHAR(10)     NOT NULL,
     text        TEXT            NOT NULL,
     time        VARCHAR(30)     NOT NULL,
-    start       VARCHAR(30)     NOT NULL
+    start       VARCHAR(30)     NOT NULL,
+    shown       VARCHAR(10)     NOT NULL
 );
 
 drop table contents_table;

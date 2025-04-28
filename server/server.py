@@ -55,9 +55,9 @@ async def conversation_model(request: ConversationRequest):
         contents = load_contents_from_db(cursor, id_user, select_user, start_user, "contents_table")
         
         if not contents:
-            contents = init_contents(client, model, generate_content_config, f"prompt_{select_user}.txt")
+            contents = init_contents(client, model, generate_content_config, f"prompt_{select_user}.txt", "false")
 
-    contents = response_generate(client, model, generate_content_config, contents, input_user)
+    contents = response_generate(client, model, generate_content_config, contents, input_user, "true")
     response = contents[-1][0].parts[0].text.strip()
 
     save_contents_to_json(contents, file_name)

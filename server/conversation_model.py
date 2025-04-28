@@ -18,17 +18,17 @@ def init_setting():
     return client, model, generate_content_config
 
 # contents 설정하기
-def init_contents(client, model, generate_content_config, prompt_name):
+def init_contents(client, model, generate_content_config, prompt_name, shown):
     with open(prompt_name, 'r', encoding="utf-8") as file:
         prompt_txt = file.read()
 
     contents_with_time = []
-    contents_with_time = response_generate(client, model, generate_content_config, contents_with_time, prompt_txt)
+    contents_with_time = response_generate(client, model, generate_content_config, contents_with_time, prompt_txt, shown)
 
     return contents_with_time
 
 # response 생성하기
-def response_generate(client, model, generate_content_config, contents_with_time, input_user):
+def response_generate(client, model, generate_content_config, contents_with_time, input_user, shown):
     contents_with_time.append(
         (
             types.Content(
@@ -36,7 +36,9 @@ def response_generate(client, model, generate_content_config, contents_with_time
                 
                 parts = [types.Part.from_text(text=input_user)]
             ),
-            datetime.now().strftime("%Y. %m. %d. %H-%M-%S")
+            datetime.now().strftime("%Y. %m. %d. %H-%M-%S"),
+
+            shown
         )
     )
 
@@ -44,7 +46,7 @@ def response_generate(client, model, generate_content_config, contents_with_time
 
     for chunk in client.models.generate_content_stream(
         model = model,
-        contents = [content for content, _ in contents_with_time],
+        contents = [content for content, _, _ in contents_with_time],
         config = generate_content_config
     ):
         if chunk.text is not None:
@@ -58,7 +60,9 @@ def response_generate(client, model, generate_content_config, contents_with_time
                 
                 parts = [types.Part.from_text(text=response)]
             ),
-            datetime.now().strftime("%Y. %m. %d. %H-%M-%S")
+            datetime.now().strftime("%Y. %m. %d. %H-%M-%S"),
+
+            shown
         )
     )
 
@@ -82,11 +86,12 @@ def save_contents_to_json(contents_with_time, file_name):
         "contents": []
     }
 
-    for content, time in contents_with_time:
+    for content, time, shown in contents_with_time:
         content_data = {
             "role": content.role,
             "parts": [{"text": part.text.strip()} for part in content.parts],
-            "time": time
+            "time": time,
+            "shown": shown
         }
         data["contents"].append(content_data)
 
@@ -122,7 +127,9 @@ def load_contents_from_json(file_name):
                 
                 parts = [types.Part.from_text(text=part["text"]) for part in content["parts"]]
             ),
-            content["time"]
+            content["time"],
+
+            content["shown"]
         )
         for content in data["contents"]
     ]
@@ -141,7 +148,7 @@ if __name__ == "__main__":
     
     if not all([client, model, generate_content_config, contents]):
         client, model, generate_content_config = init_setting()
-        contents = init_contents(client, model, generate_content_config, "prompt.txt")
+        contents = init_contents(client, model, generate_content_config, "prompt.txt", "false")
     
     while True:
         input_user = input()
@@ -153,11 +160,11 @@ if __name__ == "__main__":
         
         print("\n나: " + input_user, end="\n")
         print("AI: ", end="")
-        contents = response_generate(client, model, generate_content_config, contents, input_user)
+        contents = response_generate(client, model, generate_content_config, contents, input_user, "true")
         
         print("\n\n=== contents 출력 시작 ===")
-        for i, (content, time) in enumerate(contents):
-            print(f"\n[{i}] role: {content.role} ({time})")
+        for i, (content, time, shown) in enumerate(contents):
+            print(f"\n[{i}] role: {content.role} ({time}) ({shown})")
             for part in content.parts:
                 print(f"{part.text[:100]}")
         print("\n=== contents 출력 종료 ===")
