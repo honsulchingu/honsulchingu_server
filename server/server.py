@@ -24,6 +24,7 @@ class ConversationRequest(BaseModel):
     select_user: str
     start_user: str
     input_user: str
+    shown_user: str
 
 # startup 구축하기
 @app.on_event("startup")
@@ -47,6 +48,7 @@ async def conversation_model(request: ConversationRequest):
     select_user = request.select_user
     start_user = request.start_user
     input_user = request.input_user
+    shown_user = request.shown_user
 
     file_name = f"contents_{id_user}_{select_user}_{start_user}.json"
     contents = load_contents_from_json(file_name)
@@ -57,7 +59,7 @@ async def conversation_model(request: ConversationRequest):
         if not contents:
             contents = init_contents(client, model, generate_content_config, f"prompt_{select_user}.txt", "false")
 
-    contents = response_generate(client, model, generate_content_config, contents, input_user, "true")
+    contents = response_generate(client, model, generate_content_config, contents, input_user, shown_user)
     response = contents[-1][0].parts[0].text.strip()
 
     save_contents_to_json(contents, file_name)

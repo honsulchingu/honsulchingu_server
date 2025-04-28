@@ -72,13 +72,13 @@ if __name__ == "__main__":
 
     connection, cursor = init_db()
 
-    choice = 0
+    choice = 1
 
-    if choice == 1:
+    if choice == 0:
         save_contents_to_db(connection, cursor, "alps1248@gmail.com", "민혁", "contents.json", "contents_table")
     else:
-        contents = load_contents_from_db(cursor, "alps1248@gmail.com", "민혁", "2025. 04. 28. 20-22-31", "contents_table")
-        save_contents_to_json(contents, f"contents_alps1248@gmail.com_민혁_2025. 04. 28. 20-22-31")
+        contents = load_contents_from_db(cursor, "alps1248@gmail.com", "민혁", "2025. 04. 28. 21-08-24", "contents_table")
+        save_contents_to_json(contents, f"contents_alps1248@gmail.com_민혁_2025. 04. 28. 21-08-24")
 
     close_db(connection, cursor)
 
