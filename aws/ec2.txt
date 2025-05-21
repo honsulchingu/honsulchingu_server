@@ -1,9 +1,9 @@
-# 입장 전
-ssh -i C:\Users\Alps1\Downloads\honsulchingu.pem ubuntu@13.208.213.183
+# - - - 입장 전 (시스템파일 설치)- - - #
+ssh -i C:\Users\Alps1\Downloads\honsulchingu.pem ubuntu@13.208.186.203
 
-scp -i C:\Users\Alps1\Downloads\honsulchingu.pem -r C:\Users\Alps1\VSCodeProjects\honsulchingu\server ubuntu@13.208.213.183:/home/ubuntu/
+scp -i C:\Users\Alps1\Downloads\honsulchingu.pem -r C:\Users\Alps1\VSCodeProjects\honsulchingu\server ubuntu@13.208.186.203:/home/ubuntu/
 
-# 입장 후 (라이브러리 설치)
+# - - - 입장 후 (라이브러리 설치) - - - #
 sudo apt update
 sudo apt list --upgradable
 sudo apt upgrade
@@ -13,21 +13,14 @@ sudo apt-get install mysql-client
 mysql -u admin -p -h dbhonsulchingu.cn0g02e6k9kl.ap-northeast-3.rds.amazonaws.com
 
 SELECT user, host FROM mysql.user;
-CREATE USER 'ubuntu'@'%' IDENTIFIED BY '12345678';
+CREATE USER IF NOT EXISTS 'ubuntu'@'%' IDENTIFIED BY '12345678';
 GRANT ALL PRIVILEGES ON dbhonsulchingu.* TO 'ubuntu'@'%';
 FLUSH PRIVILEGES;
-
 exit
 
 sudo apt install python3-pip
-pip3 install dotenv --break-system-packages
-pip3 install fastapi --break-system-packages
-pip3 install uvicorn --break-system-packages
-pip3 install google-genai --break-system-packages
-pip3 install ujson --break-system-packages
-pip3 install pymysql --break-system-packages
+pip3 install fastapi uvicorn google-genai pymysql dotenv --break-system-packages
+logout
 
 cd server
 python3 server.py
-
-logout
