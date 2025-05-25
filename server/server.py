@@ -6,18 +6,23 @@ from fastapi                import FastAPI
 from uvicorn                import run
 from pydantic               import BaseModel
 from conversation_model     import init_setting, response_generate
-from rds                    import init_db, load_setting_from_db, load_prompt_from_db, save_contents_to_db, load_contents_from_db, load_chat_from_db, load_last_from_db, close_db
+from rds                    import (init_db,        load_setting_from_db,       load_prompt_from_db,
+                                                    save_contents_to_db,        load_contents_from_db,
+                                                    load_chat_from_db,          load_last_from_db,
+                                                    add_user_to_db,             delete_user_from_db,        close_db)
 
 # - - - 임시 선언하기 - - - #
 client                      = None
 model                       = None
 generate_content_config     = None
+KAKAO                       = None
+BEGIN                       = None
 TAG                         = None
 connection                  = None
 cursor                      = None
 app                         = FastAPI()
 
-# - - - request 선언하기 - - - #
+# - - - ConversationRequest 선언하기 - - - #
 class ConversationRequest(BaseModel):
     id_user:            str
     select_user:        str
@@ -26,15 +31,22 @@ class ConversationRequest(BaseModel):
     start_user:         str
     shown_user:         str
 
+# - - - ManagementRequest 선언하기 - - - #
+class ManagementRequest(BaseModel):
+    email:          str
+    nickname:       str
+    image:          str
+    startday:       str
+
 # - - - startup 구축하기 - - - #
 @app.on_event("startup")
 async def startup_event():
-    global client, model, generate_content_config, TAG, connection, cursor
-
+    global client, model, generate_content_config, KAKAO, BEGIN, TAG, connection, cursor
+    
     connection, cursor = init_db()
-
-    KEY, MODEL, TYPE, TAG = load_setting_from_db(cursor          = cursor,
-                                                 table_name      = "setting_table")
+    
+    KEY, MODEL, TYPE, KAKAO, BEGIN, TAG = load_setting_from_db(cursor           = cursor,
+                                                               table_name       = "setting_table")
     
     client, model, generate_content_config = init_setting(KEY       = KEY,
                                                           MODEL     = MODEL,
@@ -61,7 +73,7 @@ async def conversation_model(request: ConversationRequest):
                                      time_user                      = request.time_user,
                                      shown_user                     = "false",
                                      CONTENTS                       = [])
-
+        
     CONTENTS = response_generate(client                         = client,
                                  model                          = model,
                                  generate_content_config        = generate_content_config,
@@ -72,7 +84,7 @@ async def conversation_model(request: ConversationRequest):
     
     output_ai = CONTENTS[-1][0].parts[0].text.strip()
     time_ai = CONTENTS[-1][1]
-
+    
     save_contents_to_db(connection      = connection,
                         cursor          = cursor,
                         id_user         = request.id_user,
@@ -82,6 +94,11 @@ async def conversation_model(request: ConversationRequest):
                         table_name      = "contents_table")
     
     return {"output_ai": output_ai, "time_ai": time_ai}
+
+# - - - /load_setting 구축하기 - - - #
+@app.post("/load_setting")
+async def load_setting():
+    return {"kakao": KAKAO, "begin": BEGIN, "tag": TAG}
 
 # - - - /load_chat 구축하기 - - - #
 @app.post("/load_chat")
@@ -98,38 +115,53 @@ async def load_chat(request: ConversationRequest):
 # - - - /load_last 구축하기 - - - #
 @app.post("/load_last")
 async def load_last(request: ConversationRequest):
-    LAST = []
-
-    for last in load_last_from_db(
-        cursor          = cursor,
-        id_user         = request.id_user,
-        shown_user      = request.shown_user,
-        table_name      = "contents_table"
-    ):
-        CONTENTS = load_contents_from_db(cursor             = cursor,
-                                         id_user            = request.id_user,
-                                         select_user        = last["select_user"],
-                                         start_user         = last["start"],
-                                         table_name         = "contents_table")
-        
-        CONTENTS = response_generate(client                         = client,
-                                     model                          = model,
-                                     generate_content_config        = generate_content_config,
-                                     input_user                     = TAG,
-                                     time_user                      = "",
-                                     shown_user                     = "",
-                                     CONTENTS                       = CONTENTS)
-        
-        output_ai = CONTENTS[-1][0].parts[0].text.strip()
-
-        tag = [tag.strip() for tag in output_ai.split(',')][:3]
-
-        LAST.append({
-            **last,
-            "tag": tag
-        })
-
+    LAST = load_last_from_db(cursor         = cursor,
+                             id_user        = request.id_user,
+                             shown_user     = request.shown_user,
+                             table_name     = "contents_table")
+    
     return {"last": LAST}
+
+# - - - /create_tag 구축하기 - - - #
+@app.post("/create_tag")
+async def create_tag(request: ConversationRequest):
+    CONTENTS = load_contents_from_db(cursor             = cursor,
+                                     id_user            = request.id_user,
+                                     select_user        = request.select_user,
+                                     start_user         = request.start_user,
+                                     table_name         = "contents_table")
+    
+    CONTENTS = response_generate(client                         = client,
+                                 model                          = model,
+                                 generate_content_config        = generate_content_config,
+                                 input_user                     = request.input_user,
+                                 time_user                      = "",
+                                 shown_user                     = "",
+                                 CONTENTS                       = CONTENTS)
+    
+    tag = [tag.strip() for tag in CONTENTS[-1][0].parts[0].text.strip().split(',')][:3]
+    
+    return {"tag": tag}
+
+# - - - /add_user 구축하기 - - - #
+@app.post("/add_user")
+async def add_user(request: ManagementRequest):
+    add_user_to_db(connection       = connection,
+                   cursor           = cursor,
+                   email            = request.email,
+                   nickname         = request.nickname,
+                   image            = request.image,
+                   startday         = request.startday,
+                   table_name       = "user_table")
+
+# - - - /delete_user 구축하기 - - - #
+@app.post("/delete_user")
+async def delete_user(request: ManagementRequest):
+    delete_user_from_db(connection          = connection,
+                        cursor              = cursor,
+                        email               = request.email,
+                        table_name_1        = "user_table",
+                        table_name_2        = "contents_table")
 
 # - - - shutdown 구축하기 - - - #
 @app.on_event("shutdown")
