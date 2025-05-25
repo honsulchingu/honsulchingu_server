@@ -108,6 +108,24 @@ def load_last_from_db(*, cursor, id_user, shown_user, table_name):
     
     return LAST
 
+# - - - character 불러오기 (db) - - - #
+def load_character_from_db(*, cursor, table_name):
+    cursor.execute(f"SELECT name, greet, tag, description, image FROM {table_name}")
+    rows = cursor.fetchall()
+    
+    CHARACTER = [
+        {
+            "name": row[0],
+            "greet": row[1],
+            "tag": row[2],
+            "description": row[3],
+            "image": row[4]
+        }
+        for row in rows
+    ]
+    
+    return CHARACTER
+
 # - - - user 추가하기 (db) - - - #
 def add_user_to_db(*, connection, cursor, email, nickname, image, startday, table_name):
     cursor.execute(f"INSERT IGNORE INTO {table_name} (email, nickname, image, startday) VALUES (%s, %s, %s, %s)", (email, nickname, image, startday))

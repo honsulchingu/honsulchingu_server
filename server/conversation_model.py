@@ -45,7 +45,7 @@ def response_generate(*, client, model, generate_content_config, input_user, tim
             types.Content(
                 role = "model",
                 
-                parts = [types.Part.from_text(text=response)]
+                parts = [types.Part.from_text(text=response.strip())]
             ),
             datetime.now(timezone("Asia/Seoul")).strftime("%Y. %m. %d. %H-%M-%S"),
 

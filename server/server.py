@@ -6,10 +6,9 @@ from fastapi                import FastAPI
 from uvicorn                import run
 from pydantic               import BaseModel
 from conversation_model     import init_setting, response_generate
-from rds                    import (init_db,        load_setting_from_db,       load_prompt_from_db,
-                                                    save_contents_to_db,        load_contents_from_db,
-                                                    load_chat_from_db,          load_last_from_db,
-                                                    add_user_to_db,             delete_user_from_db,        close_db)
+from rds                    import (init_db,        load_setting_from_db,       save_contents_to_db,        add_user_to_db,             load_character_from_db,
+                                    close_db,       load_prompt_from_db,        load_contents_from_db,      delete_user_from_db,        load_chat_from_db,
+                                                                                                                                        load_last_from_db)
 
 # - - - 임시 선언하기 - - - #
 client                      = None
@@ -82,7 +81,7 @@ async def conversation_model(request: ConversationRequest):
                                  shown_user                     = request.shown_user,
                                  CONTENTS                       = CONTENTS)
     
-    output_ai = CONTENTS[-1][0].parts[0].text.strip()
+    output_ai = CONTENTS[-1][0].parts[0].text
     time_ai = CONTENTS[-1][1]
     
     save_contents_to_db(connection      = connection,
@@ -139,9 +138,17 @@ async def create_tag(request: ConversationRequest):
                                  shown_user                     = "",
                                  CONTENTS                       = CONTENTS)
     
-    tag = [tag.strip() for tag in CONTENTS[-1][0].parts[0].text.strip().split(',')][:3]
+    tag = ['#' + tag.strip() for tag in CONTENTS[-1][0].parts[0].text.split(',')][:3]
     
     return {"tag": tag}
+
+# - - - /load_character 구축하기 - - - #
+@app.post("/load_character")
+async def load_character():
+    CHARACTER = load_character_from_db(cursor           = cursor,
+                                       table_name       = "prompt_table")
+    
+    return {"character": CHARACTER}
 
 # - - - /add_user 구축하기 - - - #
 @app.post("/add_user")
