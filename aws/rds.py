@@ -108,15 +108,48 @@ def load_last_from_db(*, cursor, id_user, shown_user, table_name):
     
     return LAST
 
+# - - - character 불러오기 (db) - - - #
+def load_character_from_db(*, cursor, table_name):
+    cursor.execute(f"SELECT name, greet, tag, description, image FROM {table_name}")
+    rows = cursor.fetchall()
+    
+    CHARACTER = [
+        {
+            "name": row[0],
+            "greet": row[1],
+            "tag": row[2],
+            "description": row[3],
+            "image": row[4]
+        }
+        for row in rows
+    ]
+    
+    return CHARACTER
+
+# - - - user 불러오기 (db) - - - #
+def load_user_from_db(*, cursor, email, table_name):
+    cursor.execute(f"SELECT email, nickname, image, startday FROM {table_name} WHERE email = %s", (email,))
+    row = cursor.fetchone()
+    
+    EMAIL, NICKNAME, IMAGE, STARTDAY = row
+    
+    return EMAIL, NICKNAME, IMAGE, STARTDAY
+
 # - - - user 추가하기 (db) - - - #
 def add_user_to_db(*, connection, cursor, email, nickname, image, startday, table_name):
-    cursor.execute(f"INSERT IGNORE INTO {table_name} (email, nickname, image, startday) VALUES (%s, %s, %s, %s)", (email, nickname, image, startday))
+    cursor.execute(f"INSERT INTO {table_name} (email, nickname, image, startday) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), image = VALUES(image)", (email, nickname, image, startday))
     connection.commit()
 
 # - - - user 삭제하기 (db) - - - #
-def delete_user_from_db(*, connection, cursor, email, table_name_1, table_name_2):
-    cursor.execute(f"DELETE FROM {table_name_1} WHERE email = %s", (email,))
+def delete_user_from_db(*, connection, cursor, email, table_name_1, table_name_2, table_name_3):
+    cursor.execute(f"DELETE FROM {table_name_1} WHERE id_user = %s", (email,))
     cursor.execute(f"DELETE FROM {table_name_2} WHERE id_user = %s", (email,))
+    cursor.execute(f"DELETE FROM {table_name_3} WHERE email = %s", (email,))
+    connection.commit()
+
+# - - - chat 삭제하기 (db) - - - #
+def delete_chat_from_db(*, connection, cursor, id_user, select_user, start_user, table_name):
+    cursor.execute(f"DELETE FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
     connection.commit()
 
 # - - - db 종료하기 - - - #

@@ -6,9 +6,9 @@ from fastapi                import FastAPI
 from uvicorn                import run
 from pydantic               import BaseModel
 from conversation_model     import init_setting, response_generate
-from rds                    import (init_db,        load_setting_from_db,       save_contents_to_db,        add_user_to_db,             load_character_from_db,
-                                    close_db,       load_prompt_from_db,        load_contents_from_db,      delete_user_from_db,        load_chat_from_db,
-                                                                                                                                        load_last_from_db)
+from rds                    import (init_db,        load_setting_from_db,       save_contents_to_db,        add_user_to_db,             load_chat_from_db,
+                                    close_db,       load_prompt_from_db,        load_contents_from_db,      delete_user_from_db,        load_last_from_db,
+                                                    load_character_from_db,                                 load_user_from_db,          delete_chat_from_db)
 
 # - - - 임시 선언하기 - - - #
 client                      = None
@@ -138,7 +138,7 @@ async def create_tag(request: ConversationRequest):
                                  shown_user                     = "",
                                  CONTENTS                       = CONTENTS)
     
-    tag = ['#' + tag.strip() for tag in CONTENTS[-1][0].parts[0].text.split(',')][:3]
+    tag = ["# " + ''.join(filter(str.isalnum, tag)) for tag in CONTENTS[-1][0].parts[0].text.split(',')][:3]
     
     return {"tag": tag}
 
@@ -149,6 +149,15 @@ async def load_character():
                                        table_name       = "prompt_table")
     
     return {"character": CHARACTER}
+
+# - - - /load_user 구축하기 - - - #
+@app.post("/load_user")
+async def load_user(request: ManagementRequest):
+    EMAIL, NICKNAME, IMAGE, STARTDAY = load_user_from_db(cursor         = cursor,
+                                                         email          = request.email,
+                                                         table_name     = "user_table")
+    
+    return {"email": EMAIL, "nickname": NICKNAME, "image": IMAGE, "startday": STARTDAY}
 
 # - - - /add_user 구축하기 - - - #
 @app.post("/add_user")
@@ -167,8 +176,19 @@ async def delete_user(request: ManagementRequest):
     delete_user_from_db(connection          = connection,
                         cursor              = cursor,
                         email               = request.email,
-                        table_name_1        = "user_table",
-                        table_name_2        = "contents_table")
+                        table_name_1        = "contents_table",
+                        table_name_2        = "prompt_table",
+                        table_name_3        = "user_table")
+
+# - - - /delete_chat 구축하기 - - - #
+@app.post("/delete_chat")
+async def delete_chat(request: ConversationRequest):
+    delete_chat_from_db(connection      = connection,
+                        cursor          = cursor,
+                        id_user         = request.id_user,
+                        select_user     = request.select_user,
+                        start_user      = request.start_user,
+                        table_name      = "contents_table")
 
 # - - - shutdown 구축하기 - - - #
 @app.on_event("shutdown")
