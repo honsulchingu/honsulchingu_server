@@ -9,6 +9,7 @@ CREATE TABLE contents_table (
     text            TEXT                NOT NULL,
     time            VARCHAR(30)         NOT NULL,
     start           VARCHAR(30)         NOT NULL,
+    favorite        VARCHAR(30)         NOT NULL,
     shown           VARCHAR(10)         NOT NULL
 );
 

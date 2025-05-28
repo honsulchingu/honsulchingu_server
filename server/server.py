@@ -6,9 +6,9 @@ from fastapi                import FastAPI
 from uvicorn                import run
 from pydantic               import BaseModel
 from conversation_model     import init_setting, response_generate
-from rds                    import (init_db,        load_setting_from_db,       save_contents_to_db,        add_user_to_db,             load_chat_from_db,
-                                    close_db,       load_prompt_from_db,        load_contents_from_db,      delete_user_from_db,        load_last_from_db,
-                                                    load_character_from_db,                                 load_user_from_db,          delete_chat_from_db)
+from rds                    import (init_db,        load_prompt_from_db,        save_contents_to_db,        load_chat_from_db,          add_user_to_db,             add_favorite_to_db,
+                                    close_db,       load_setting_from_db,       load_contents_from_db,      load_last_from_db,          delete_user_from_db,        delete_favorite_from_db,
+                                                    load_character_from_db,                                 delete_chat_from_db,        load_user_from_db,          load_favorite_from_db)
 
 # - - - 임시 선언하기 - - - #
 client                      = None
@@ -99,6 +99,23 @@ async def conversation_model(request: ConversationRequest):
 async def load_setting():
     return {"kakao": KAKAO, "begin": BEGIN, "tag": TAG}
 
+# - - - /load_character 구축하기 - - - #
+@app.post("/load_character")
+async def load_character():
+    CHARACTER = load_character_from_db(cursor           = cursor,
+                                       table_name       = "prompt_table")
+    
+    return {"character": CHARACTER}
+
+# - - - /load_last 구축하기 - - - #
+@app.post("/load_last")
+async def load_last(request: ConversationRequest):
+    LAST = load_last_from_db(cursor         = cursor,
+                             id_user        = request.id_user,
+                             table_name     = "contents_table")
+    
+    return {"last": LAST}
+
 # - - - /load_chat 구축하기 - - - #
 @app.post("/load_chat")
 async def load_chat(request: ConversationRequest):
@@ -106,20 +123,19 @@ async def load_chat(request: ConversationRequest):
                              id_user            = request.id_user,
                              select_user        = request.select_user,
                              start_user         = request.start_user,
-                             shown_user         = request.shown_user,
                              table_name         = "contents_table")
     
     return {"chat": CHAT}
 
-# - - - /load_last 구축하기 - - - #
-@app.post("/load_last")
-async def load_last(request: ConversationRequest):
-    LAST = load_last_from_db(cursor         = cursor,
-                             id_user        = request.id_user,
-                             shown_user     = request.shown_user,
-                             table_name     = "contents_table")
-    
-    return {"last": LAST}
+# - - - /delete_chat 구축하기 - - - #
+@app.post("/delete_chat")
+async def delete_chat(request: ConversationRequest):
+    delete_chat_from_db(connection      = connection,
+                        cursor          = cursor,
+                        id_user         = request.id_user,
+                        select_user     = request.select_user,
+                        start_user      = request.start_user,
+                        table_name      = "contents_table")
 
 # - - - /create_tag 구축하기 - - - #
 @app.post("/create_tag")
@@ -142,23 +158,6 @@ async def create_tag(request: ConversationRequest):
     
     return {"tag": tag}
 
-# - - - /load_character 구축하기 - - - #
-@app.post("/load_character")
-async def load_character():
-    CHARACTER = load_character_from_db(cursor           = cursor,
-                                       table_name       = "prompt_table")
-    
-    return {"character": CHARACTER}
-
-# - - - /load_user 구축하기 - - - #
-@app.post("/load_user")
-async def load_user(request: ManagementRequest):
-    EMAIL, NICKNAME, IMAGE, STARTDAY = load_user_from_db(cursor         = cursor,
-                                                         email          = request.email,
-                                                         table_name     = "user_table")
-    
-    return {"email": EMAIL, "nickname": NICKNAME, "image": IMAGE, "startday": STARTDAY}
-
 # - - - /add_user 구축하기 - - - #
 @app.post("/add_user")
 async def add_user(request: ManagementRequest):
@@ -180,15 +179,41 @@ async def delete_user(request: ManagementRequest):
                         table_name_2        = "prompt_table",
                         table_name_3        = "user_table")
 
-# - - - /delete_chat 구축하기 - - - #
-@app.post("/delete_chat")
-async def delete_chat(request: ConversationRequest):
-    delete_chat_from_db(connection      = connection,
-                        cursor          = cursor,
-                        id_user         = request.id_user,
-                        select_user     = request.select_user,
-                        start_user      = request.start_user,
-                        table_name      = "contents_table")
+# - - - /load_user 구축하기 - - - #
+@app.post("/load_user")
+async def load_user(request: ManagementRequest):
+    EMAIL, NICKNAME, IMAGE, STARTDAY = load_user_from_db(cursor         = cursor,
+                                                         email          = request.email,
+                                                         table_name     = "user_table")
+    
+    return {"email": EMAIL, "nickname": NICKNAME, "image": IMAGE, "startday": STARTDAY}
+
+# - - - /add_favorite 구축하기 - - - #
+@app.post("/add_favorite")
+async def add_favorite(request: ConversationRequest):
+    add_favorite_to_db(connection       = connection,
+                       cursor           = cursor,
+                       id_user          = request.id_user,
+                       time_user        = request.time_user,
+                       table_name       = "contents_table")
+
+# - - - /delete_favorite 구축하기 - - - #
+@app.post("/delete_favorite")
+async def delete_favorite(request: ConversationRequest):
+    delete_favorite_from_db(connection       = connection,
+                            cursor           = cursor,
+                            id_user          = request.id_user,
+                            time_user        = request.time_user,
+                            table_name       = "contents_table")
+
+# - - - /load_favorite 구축하기 - - - #
+@app.post("/load_favorite")
+async def load_favorite(request: ConversationRequest):
+    FAVORITE = load_favorite_from_db(cursor           = cursor,
+                                     id_user          = request.id_user,
+                                     table_name       = "contents_table")
+    
+    return {"favorite": FAVORITE}
 
 # - - - shutdown 구축하기 - - - #
 @app.on_event("shutdown")

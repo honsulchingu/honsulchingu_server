@@ -25,6 +25,8 @@ def response_generate(*, client, model, generate_content_config, input_user, tim
             ),
             time_user,
 
+            "",
+
             shown_user
         )
     )
@@ -33,7 +35,7 @@ def response_generate(*, client, model, generate_content_config, input_user, tim
 
     for chunk in client.models.generate_content_stream(
         model = model,
-        contents = [content for content, _, _ in CONTENTS],
+        contents = [content for content, _, _, _ in CONTENTS],
         config = generate_content_config
     ):
         if chunk.text is not None:
@@ -48,6 +50,8 @@ def response_generate(*, client, model, generate_content_config, input_user, tim
                 parts = [types.Part.from_text(text=response.strip())]
             ),
             datetime.now(timezone("Asia/Seoul")).strftime("%Y. %m. %d. %H-%M-%S"),
+
+            "",
 
             shown_user
         )
