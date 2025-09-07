@@ -1,16 +1,18 @@
-# - - - 입장 전 (시스템파일 설치)- - - #
-ssh -i C:\Users\Alps1\Downloads\honsulchingu.pem ubuntu@13.208.186.203
+# 입장 전 (시스템파일 설치)
+$ip = "15.168.7.91"
 
-scp -i C:\Users\Alps1\Downloads\honsulchingu.pem -r C:\Users\Alps1\VSCodeProjects\honsulchingu\server ubuntu@13.208.186.203:/home/ubuntu/
+ssh -i "C:\Users\Alps1\Downloads\honsulchingu.pem" "ubuntu@${ip}"
 
-# - - - 입장 후 (라이브러리 설치) - - - #
+scp -i "C:\Users\Alps1\Downloads\honsulchingu.pem" -r "C:\Users\Alps1\VSCodeProjects\honsulchingu\honsulchingu_server\analyzation" "C:\Users\Alps1\VSCodeProjects\honsulchingu\honsulchingu_server\aws" "C:\Users\Alps1\VSCodeProjects\honsulchingu\honsulchingu_server\conversation" "C:\Users\Alps1\VSCodeProjects\honsulchingu\honsulchingu_server\server.py" "ubuntu@${ip}:/home/ubuntu/honsulchingu_server" ; ssh -i "C:\Users\Alps1\Downloads\honsulchingu.pem" "ubuntu@${ip}"
+
+# 입장 후 (라이브러리 설치)
 sudo apt update
 sudo apt list --upgradable
-sudo apt upgrade
+sudo apt upgrade -y
 sudo apt list --upgradable
 
-sudo apt-get install mysql-client
-mysql -u admin -p -h dbhonsulchingu.cn0g02e6k9kl.ap-northeast-3.rds.amazonaws.com
+sudo apt-get install mysql-client -y
+mysql -u admin -p12345678 -h dbhonsulchingu.cn0g02e6k9kl.ap-northeast-3.rds.amazonaws.com
 
 SELECT user, host FROM mysql.user;
 CREATE USER IF NOT EXISTS 'ubuntu'@'%' IDENTIFIED BY '12345678';
@@ -18,9 +20,26 @@ GRANT ALL PRIVILEGES ON dbhonsulchingu.* TO 'ubuntu'@'%';
 FLUSH PRIVILEGES;
 exit
 
-sudo apt install python3-pip
-pip3 install fastapi uvicorn google-genai pymysql dotenv --break-system-packages
+sudo apt install python3-pip -y
+pip3 install uvicorn fastapi python-multipart faster-whisper tensorflow-cpu google-genai soundfile librosa pymysql dotenv --break-system-packages
 logout
 
-cd server
-python3 server.py
+sudo apt update && sudo apt list --upgradable && sudo apt upgrade -y && sudo apt list --upgradable && sudo apt-get install mysql-client -y && mysql -u admin -p12345678 -h dbhonsulchingu.cn0g02e6k9kl.ap-northeast-3.rds.amazonaws.com -e "SELECT user, host FROM mysql.user; CREATE USER IF NOT EXISTS 'ubuntu'@'%' IDENTIFIED BY '12345678'; GRANT ALL PRIVILEGES ON dbhonsulchingu.* TO 'ubuntu'@'%'; FLUSH PRIVILEGES;" && sudo apt install python3-pip -y && pip3 install uvicorn fastapi python-multipart faster-whisper tensorflow-cpu google-genai soundfile librosa pymysql dotenv --break-system-packages && logout
+
+# 입장 중 (서버명령어 실행)
+python3 honsulchingu_server/server.py
+enter
+ctrl + c
+
+lsof -i :8000
+python3 19771 ubuntu    7u  IPv4  66266      0t0  TCP *:8000 (LISTEN)
+kill -9 19771
+
+sudo apt install tmux
+tmux new -s honsulchingu_server
+tmux attach -t honsulchingu_server
+python3 honsulchingu_server/server.py
+ctrl + b
+d
+ctrl + c
+ctrl + d

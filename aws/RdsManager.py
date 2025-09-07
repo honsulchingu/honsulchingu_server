@@ -1,7 +1,5 @@
 # %%
-# Kernel - Python (3.12.7)
-# !pip install pymysql
-# !pip install dotenv
+# .py3127_env\Scripts\activate && pip install pymysql dotenv
 from os                 import environ
 from pymysql            import connect
 from google.genai       import types
@@ -9,7 +7,7 @@ from datetime           import datetime
 from pytz               import timezone
 from dotenv             import load_dotenv
 
-# - - - db 설정하기 - - - #
+# db 설정하기
 def init_db():
     load_dotenv()
     
@@ -23,16 +21,16 @@ def init_db():
     
     return connection, cursor
 
-# - - - setting 불러오기 (db) - - - #
+# setting 불러오기
 def load_setting_from_db(*, cursor, table_name):
-    cursor.execute(f"SELECT key_setting, model_setting, type_setting, kakao_setting, begin_setting, tag_setting FROM {table_name}")
+    cursor.execute(f"SELECT key_setting, model_setting, type_setting, tts_setting, kakao_setting, google_setting, begin_setting, tag_setting FROM {table_name}")
     row = cursor.fetchone()
     
-    KEY, MODEL, TYPE, KAKAO, BEGIN, TAG = row
+    KEY, MODEL, TYPE, TTS, KAKAO, GOOGLE, BEGIN, TAG = row
     
-    return KEY, MODEL, TYPE, KAKAO, BEGIN, TAG
+    return KEY, MODEL, TYPE, TTS, KAKAO, GOOGLE, BEGIN, TAG
 
-# - - - prompt 불러오기 (db) - - - #
+# prompt 불러오기
 def load_prompt_from_db(*, cursor, select_user, table_name):
     cursor.execute(f"SELECT prompt FROM {table_name} WHERE name = %s", (select_user))
     row = cursor.fetchone()
@@ -41,7 +39,7 @@ def load_prompt_from_db(*, cursor, select_user, table_name):
     
     return PROMPT
 
-# - - - contents 저장하기 (db) - - - #
+# contents 저장하기
 def save_contents_to_db(*, connection, cursor, id_user, select_user, start_user, CONTENTS, table_name):
     cursor.execute(f"DELETE FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
     connection.commit()
@@ -56,7 +54,7 @@ def save_contents_to_db(*, connection, cursor, id_user, select_user, start_user,
         
     connection.commit()
 
-# - - - contents 불러오기 (db) - - - #
+# contents 불러오기
 def load_contents_from_db(*, cursor, id_user, select_user, start_user, table_name):
     cursor.execute(f"SELECT role, text, time, favorite, shown FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
     rows = cursor.fetchall()
@@ -79,25 +77,26 @@ def load_contents_from_db(*, cursor, id_user, select_user, start_user, table_nam
     
     return CONTENTS
 
-# - - - character 불러오기 (db) - - - #
+# character 불러오기
 def load_character_from_db(*, cursor, table_name):
-    cursor.execute(f"SELECT name, greet, tag, description, image FROM {table_name}")
+    cursor.execute(f"SELECT name, speak, greet, tag, description, image FROM {table_name}")
     rows = cursor.fetchall()
     
     CHARACTER = [
         {
             "name": row[0],
-            "greet": row[1],
-            "tag": row[2],
-            "description": row[3],
-            "image": row[4]
+            "speak": row[1],
+            "greet": row[2],
+            "tag": row[3],
+            "description": row[4],
+            "image": row[5]
         }
         for row in rows
     ]
     
     return CHARACTER
 
-# - - - last 불러오기 (db) - - - #
+# last 불러오기
 def load_last_from_db(*, cursor, id_user, table_name):
     cursor.execute(f"SELECT t1.select_user, t1.text, t1.time, t1.start, t1.favorite, p.image FROM {table_name} t1 JOIN (SELECT start, MAX(time) AS max_time FROM {table_name} WHERE id_user = %s AND shown = %s GROUP BY start) t2 ON t1.start = t2.start AND t1.time = t2.max_time LEFT JOIN prompt_table p ON t1.select_user = p.name WHERE t1.id_user = %s AND t1.shown = %s", (id_user, "true", id_user, "true"))
     rows = cursor.fetchall()
@@ -116,7 +115,7 @@ def load_last_from_db(*, cursor, id_user, table_name):
     
     return LAST
 
-# - - - chat 불러오기 (db) - - - #
+# chat 불러오기
 def load_chat_from_db(*, cursor, id_user, select_user, start_user, table_name):
     cursor.execute(f"SELECT role, text, time, favorite FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s AND shown = %s", (id_user, select_user, start_user, "true"))
     rows = cursor.fetchall()
@@ -133,24 +132,31 @@ def load_chat_from_db(*, cursor, id_user, select_user, start_user, table_name):
     
     return CHAT
 
-# - - - chat 삭제하기 (db) - - - #
+# chat 삭제하기
 def delete_chat_from_db(*, connection, cursor, id_user, select_user, start_user, table_name):
+    cursor.execute(f"SELECT COUNT(*) FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s AND favorite != %s", (id_user, select_user, start_user, ""))
+    row = cursor.fetchone()
+
+    FAVORITE_COUNT = row[0]
+
     cursor.execute(f"DELETE FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
     connection.commit()
 
-# - - - user 추가하기 (db) - - - #
+    return FAVORITE_COUNT
+
+# user 추가하기
 def add_user_to_db(*, connection, cursor, email, nickname, image, startday, table_name):
     cursor.execute(f"INSERT INTO {table_name} (email, nickname, image, startday) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), image = VALUES(image)", (email, nickname, image, startday))
     connection.commit()
 
-# - - - user 삭제하기 (db) - - - #
+# user 삭제하기
 def delete_user_from_db(*, connection, cursor, email, table_name_1, table_name_2, table_name_3):
     cursor.execute(f"DELETE FROM {table_name_1} WHERE id_user = %s", (email,))
     cursor.execute(f"DELETE FROM {table_name_2} WHERE id_user = %s", (email,))
     cursor.execute(f"DELETE FROM {table_name_3} WHERE email = %s", (email,))
     connection.commit()
 
-# - - - user 불러오기 (db) - - - #
+# user 불러오기
 def load_user_from_db(*, cursor, email, table_name):
     cursor.execute(f"SELECT email, nickname, image, startday FROM {table_name} WHERE email = %s", (email,))
     row = cursor.fetchone()
@@ -159,17 +165,17 @@ def load_user_from_db(*, cursor, email, table_name):
     
     return EMAIL, NICKNAME, IMAGE, STARTDAY
 
-# - - - favorite 추가하기 (db) - - - #
+# favorite 추가하기
 def add_favorite_to_db(*, connection, cursor, id_user, time_user, table_name):
     cursor.execute(f"UPDATE {table_name} SET favorite = %s WHERE id_user = %s AND time = %s", (datetime.now(timezone("Asia/Seoul")).strftime("%Y. %m. %d. %H-%M-%S"), id_user, time_user))
     connection.commit()
 
-# - - - favorite 삭제하기 (db) - - - #
+# favorite 삭제하기
 def delete_favorite_from_db(*, connection, cursor, id_user, time_user, table_name):
     cursor.execute(f"UPDATE {table_name} SET favorite = %s WHERE id_user = %s AND time = %s", ("", id_user, time_user))
     connection.commit()
 
-# - - - favorite 불러오기 (db) - - - #
+# favorite 불러오기
 def load_favorite_from_db(*, cursor, id_user, table_name):
     cursor.execute(f"SELECT t.select_user, t.text, t.time, t.start, t.favorite, p.image FROM {table_name} t LEFT JOIN prompt_table p ON t.select_user = p.name WHERE t.id_user = %s AND t.favorite != %s", (id_user, ""))
     rows = cursor.fetchall()
@@ -188,7 +194,7 @@ def load_favorite_from_db(*, cursor, id_user, table_name):
     
     return FAVORITE
 
-# - - - db 종료하기 - - - #
+# db 종료하기
 def close_db(*, connection, cursor):
     cursor.close()
     connection.close()
