@@ -28,7 +28,6 @@ class ConversationRequest(BaseModel):
     input_user:         str
     time_user:          str
     start_user:         str
-    shown_user:         str
 
 # - - - ManagementRequest 선언하기 - - - #
 class ManagementRequest(BaseModel):
@@ -78,7 +77,7 @@ async def conversation_model(request: ConversationRequest):
                                  generate_content_config        = generate_content_config,
                                  input_user                     = request.input_user,
                                  time_user                      = request.time_user,
-                                 shown_user                     = request.shown_user,
+                                 shown_user                     = "true",
                                  CONTENTS                       = CONTENTS)
     
     output_ai = CONTENTS[-1][0].parts[0].text
@@ -130,12 +129,14 @@ async def load_chat(request: ConversationRequest):
 # - - - /delete_chat 구축하기 - - - #
 @app.post("/delete_chat")
 async def delete_chat(request: ConversationRequest):
-    delete_chat_from_db(connection      = connection,
-                        cursor          = cursor,
-                        id_user         = request.id_user,
-                        select_user     = request.select_user,
-                        start_user      = request.start_user,
-                        table_name      = "contents_table")
+    FAVORITE_COUNT = delete_chat_from_db(connection         = connection,
+                                         cursor             = cursor,
+                                         id_user            = request.id_user,
+                                         select_user        = request.select_user,
+                                         start_user         = request.start_user,
+                                         table_name         = "contents_table")
+
+    return {"favorite_count": FAVORITE_COUNT}
 
 # - - - /create_tag 구축하기 - - - #
 @app.post("/create_tag")

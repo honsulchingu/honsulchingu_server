@@ -135,8 +135,15 @@ def load_chat_from_db(*, cursor, id_user, select_user, start_user, table_name):
 
 # - - - chat 삭제하기 (db) - - - #
 def delete_chat_from_db(*, connection, cursor, id_user, select_user, start_user, table_name):
+    cursor.execute(f"SELECT COUNT(*) FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s AND favorite != %s", (id_user, select_user, start_user, ""))
+    row = cursor.fetchone()
+
+    FAVORITE_COUNT = row[0]
+
     cursor.execute(f"DELETE FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
     connection.commit()
+
+    return FAVORITE_COUNT
 
 # - - - user 추가하기 (db) - - - #
 def add_user_to_db(*, connection, cursor, email, nickname, image, startday, table_name):
