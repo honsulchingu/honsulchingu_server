@@ -1,11 +1,13 @@
 # %%
-# .py3127_env\Scripts\activate && pip install google-genai soundfile librosa
-from base64                     import b64encode
+# .py3127_env\Scripts\activate && pip install google-genai librosa git+https://github.com/ssut/py-hanspell.git
+from sys                        import path; path.insert(0, "./")
 from io                         import BytesIO
+from base64                     import b64encode
 from google                     import genai
 from google.genai               import types
 from numpy                      import pad
 from struct                     import pack
+from hanspell                   import spell_checker
 # from librosa                    import load
 # from librosa.feature            import mfcc
 # from sklearn.preprocessing      import scale
@@ -39,7 +41,7 @@ def judgement_generate(*, whisper, cnn, wav_bytes):
                                      beam_size = 1,
                                      condition_on_previous_text = True)
     
-    SENTENCE = "".join(segment.text for segment in segments).strip()
+    SENTENCE = spell_checker.check("".join(segment.text for segment in segments).strip()).checked
     
     return JUDGE, SENTENCE
 
@@ -51,6 +53,8 @@ def tts_generate(*, client, tts, speak_user, speak_ai, output_ai):
     
     contents = [types.Content(role = "user",
                               parts = [types.Part.from_text(text = f"{speak_ai}: {output_ai}")])]
+    
+    print(f"{speak_ai}: {output_ai}")  # uvicorn stdout 로그에 표시됨
     
     for chunk in client.models.generate_content_stream(
         model = tts,

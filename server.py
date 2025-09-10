@@ -12,8 +12,6 @@ from aws.RdsManager                     import (init_db,        load_prompt_from
                                                 close_db,       load_setting_from_db,       load_contents_from_db,      load_last_from_db,          delete_user_from_db,        delete_favorite_from_db,
                                                                 load_character_from_db,                                 delete_chat_from_db,        load_user_from_db,          load_favorite_from_db)
 
-# 60줄 실험 중... tiny -> base
-
 # 공유변수 임시 선언하기
 client                      = None
 model                       = None
@@ -58,7 +56,7 @@ async def startup_event():
                                                                MODEL        = MODEL,
                                                                TYPE         = TYPE)
     
-    whisper = WhisperModel("tiny", device = "cpu", compute_type = "int16")
+    whisper = WhisperModel("base", device = "cpu", compute_type = "int16")
     
     # cnn = keras.models.load_model("AnalyzationModel.h5")
 
@@ -191,24 +189,14 @@ async def analyzation_model(id_user:           str = Form(...),
                                  shown_user                     = "true",
                                  CONTENTS                       = CONTENTS)
     
-    CONTENTS_SPEAK = response_generate(client                       = client,
-                                       model                        = model,
-                                       generate_content_config      = generate_content_config,
-                                       input_user                   = "사용자에게 마지막으로 했던 말에 어울리는 목소리의 표현을 단어만을 이용하여 설명합니다.",
-                                       time_user                    = time_user,
-                                       shown_user                   = "false",
-                                       CONTENTS                     = CONTENTS)
+    print(CONTENTS[-2][0].parts[0].text)
     
     output_ai = CONTENTS[-1][0].parts[0].text
-    
-    time_ai = CONTENTS[-1][1]
-    
-    speak_ai = CONTENTS_SPEAK[-1][0].parts[0].text
     
     tts_ai = tts_generate(client            = client,
                           tts               = TTS,
                           speak_user        = speak_user,
-                          speak_ai          = speak_ai,
+                          speak_ai          = "이전의 대화를 기억하고 있는 사람처럼",
                           output_ai         = output_ai)
     
     save_contents_to_db(connection      = connection,
@@ -219,7 +207,7 @@ async def analyzation_model(id_user:           str = Form(...),
                         CONTENTS        = CONTENTS,
                         table_name      = "contents_table")
     
-    return {"input_ai": SENTENCE, "output_ai": output_ai, "time_ai": time_ai, "tts_ai": tts_ai}
+    return {"output_ai": output_ai, "tts_ai": tts_ai}
 
 # /load_setting 구축하기
 @app.post("/load_setting")
