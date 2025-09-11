@@ -1,16 +1,13 @@
 # %%
-# .py3127_env\Scripts\activate && pip install google-genai librosa git+https://github.com/ssut/py-hanspell.git
-from sys                        import path; path.insert(0, "./")
+# .py3127_env\Scripts\activate && pip install google-genai librosa
 from io                         import BytesIO
 from base64                     import b64encode
-from google                     import genai
 from google.genai               import types
 from numpy                      import pad
 from struct                     import pack
-from hanspell                   import spell_checker
-# from librosa                    import load
-# from librosa.feature            import mfcc
-# from sklearn.preprocessing      import scale
+from librosa                    import load
+from librosa.feature            import mfcc
+from sklearn.preprocessing      import scale
 
 # judge 생성하기
 def judgement_generate(*, whisper, cnn, wav_bytes):
@@ -38,10 +35,13 @@ def judgement_generate(*, whisper, cnn, wav_bytes):
     
     segments, _ = whisper.transcribe(WAV_BYTES,
                                      language = "ko",
-                                     beam_size = 1,
+                                     task = "transcribe",
+                                     beam_size = 6,
+                                     vad_filter = True,
+                                     word_timestamps = False,
                                      condition_on_previous_text = True)
     
-    SENTENCE = spell_checker.check("".join(segment.text for segment in segments).strip()).checked
+    SENTENCE = "".join(segment.text for segment in segments).strip()
     
     return JUDGE, SENTENCE
 
@@ -54,7 +54,7 @@ def tts_generate(*, client, tts, speak_user, speak_ai, output_ai):
     contents = [types.Content(role = "user",
                               parts = [types.Part.from_text(text = f"{speak_ai}: {output_ai}")])]
     
-    print(f"{speak_ai}: {output_ai}")  # uvicorn stdout 로그에 표시됨
+    print(f"{speak_ai}: {output_ai}")  # 수정사항 1 (1/5) print() 추가
     
     for chunk in client.models.generate_content_stream(
         model = tts,

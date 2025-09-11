@@ -56,7 +56,7 @@ async def startup_event():
                                                                MODEL        = MODEL,
                                                                TYPE         = TYPE)
     
-    whisper = WhisperModel("base", device = "cpu", compute_type = "int16")
+    whisper = WhisperModel("small", device = "cpu", compute_type = "int16")
     
     # cnn = keras.models.load_model("AnalyzationModel.h5")
 
@@ -189,15 +189,16 @@ async def analyzation_model(id_user:           str = Form(...),
                                  shown_user                     = "true",
                                  CONTENTS                       = CONTENTS)
     
-    print(CONTENTS[-2][0].parts[0].text)
+    print(CONTENTS[-2][0].parts[0].text) # 수정사항 2 (2/5) print() 추가
     
     output_ai = CONTENTS[-1][0].parts[0].text
     
-    tts_ai = tts_generate(client            = client,
-                          tts               = TTS,
-                          speak_user        = speak_user,
-                          speak_ai          = "이전의 대화를 기억하고 있는 사람처럼",
-                          output_ai         = output_ai)
+    # 수정사항 4 (4/5) 주석처리
+    # tts_ai = tts_generate(client            = client,
+    #                       tts               = TTS,
+    #                       speak_user        = speak_user,
+    #                       speak_ai          = "(이전의 대화를 기억하고 있는 사람처럼)", # 수정사항 3 (3/5) ( ) 추가
+    #                       output_ai         = output_ai)
     
     save_contents_to_db(connection      = connection,
                         cursor          = cursor,
@@ -207,7 +208,7 @@ async def analyzation_model(id_user:           str = Form(...),
                         CONTENTS        = CONTENTS,
                         table_name      = "contents_table")
     
-    return {"output_ai": output_ai, "tts_ai": tts_ai}
+    return {"output_ai": output_ai} # , "tts_ai": tts_ai} # 수정사항 5 (5/5) 주석처리
 
 # /load_setting 구축하기
 @app.post("/load_setting")
