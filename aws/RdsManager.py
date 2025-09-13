@@ -145,8 +145,8 @@ def delete_chat_from_db(*, connection, cursor, id_user, select_user, start_user,
     return FAVORITE_COUNT
 
 # user 추가하기
-def add_user_to_db(*, connection, cursor, email, nickname, image, startday, table_name):
-    cursor.execute(f"INSERT INTO {table_name} (email, nickname, image, startday) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), image = VALUES(image)", (email, nickname, image, startday))
+def add_user_to_db(*, connection, cursor, email, nickname, image, startday, age, gender, table_name):
+    cursor.execute(f"INSERT INTO {table_name} (email, nickname, image, age, gender, startday) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), image = VALUES(image)", (email, nickname, image, age, gender, startday))
     connection.commit()
 
 # user 삭제하기
@@ -158,12 +158,14 @@ def delete_user_from_db(*, connection, cursor, email, table_name_1, table_name_2
 
 # user 불러오기
 def load_user_from_db(*, cursor, email, table_name):
-    cursor.execute(f"SELECT email, nickname, image, startday FROM {table_name} WHERE email = %s", (email,))
+    cursor.execute(f"SELECT email, nickname, image, age, gender, startday FROM {table_name} WHERE email = %s", (email,))
     row = cursor.fetchone()
     
-    EMAIL, NICKNAME, IMAGE, STARTDAY = row
+    if not row: return "", "", "", "", "", ""
     
-    return EMAIL, NICKNAME, IMAGE, STARTDAY
+    EMAIL, NICKNAME, IMAGE, AGE, GENDER, STARTDAY = (v if v is not None else "" for v in row)
+    
+    return EMAIL, NICKNAME, IMAGE, AGE, GENDER, STARTDAY
 
 # favorite 추가하기
 def add_favorite_to_db(*, connection, cursor, id_user, time_user, table_name):

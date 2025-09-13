@@ -40,6 +40,8 @@ class ManagementRequest(BaseModel):
     email:          str
     nickname:       str
     image:          str
+    age:            str
+    gender:         str
     startday:       str
 
 # startup 구축하기
@@ -284,6 +286,8 @@ async def add_user(request: ManagementRequest):
                    email            = request.email,
                    nickname         = request.nickname,
                    image            = request.image,
+                   age              = request.age,
+                   gender           = request.gender,
                    startday         = request.startday,
                    table_name       = "user_table")
 
@@ -300,11 +304,11 @@ async def delete_user(request: ManagementRequest):
 # /load_user 구축하기
 @app.post("/load_user")
 async def load_user(request: ManagementRequest):
-    EMAIL, NICKNAME, IMAGE, STARTDAY = load_user_from_db(cursor         = cursor,
-                                                         email          = request.email,
-                                                         table_name     = "user_table")
+    EMAIL, NICKNAME, IMAGE, AGE, GENDER, STARTDAY = load_user_from_db(cursor            = cursor,
+                                                                      email             = request.email,
+                                                                      table_name        = "user_table")
     
-    return {"email": EMAIL, "nickname": NICKNAME, "image": IMAGE, "startday": STARTDAY}
+    return {"email": EMAIL, "nickname": NICKNAME, "image": IMAGE, "age": AGE, "gender": GENDER, "startday": STARTDAY}
 
 # /add_favorite 구축하기
 @app.post("/add_favorite")

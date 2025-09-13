@@ -73,6 +73,8 @@ CREATE TABLE user_table (
     email           VARCHAR(255)        NOT NULL            UNIQUE,
     nickname        VARCHAR(255)        NOT NULL,
     image           TEXT                NOT NULL,
+    age             VARCHAR(10)         NOT NULL,
+    gender          VARCHAR(10)         NOT NULL,
     startday        VARCHAR(30)         NOT NULL
 );
 
