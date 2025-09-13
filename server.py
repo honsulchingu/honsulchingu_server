@@ -1,11 +1,11 @@
 # %%
-# .py3127_env\Scripts\activate && pip install uvicorn fastapi python-multipart tensorflow-cpu faster-whisper
+# .py3127_env\Scripts\activate && pip install uvicorn fastapi python-multipart faster-whisper tensorflow-cpu
 from gc                                 import collect
 from uvicorn                            import run
 from pydantic                           import BaseModel
 from fastapi                            import FastAPI, UploadFile, File, Form
-from tensorflow                         import keras
 from faster_whisper                     import WhisperModel
+from tensorflow.keras.models            import load_model
 from conversation.ConversationModel     import init_conversation, response_generate
 from analyzation.AnalyzationModel       import judgement_generate, tts_generate
 from aws.RdsManager                     import (init_db,        load_prompt_from_db,        save_contents_to_db,        load_chat_from_db,          add_user_to_db,             add_favorite_to_db,
@@ -58,7 +58,7 @@ async def startup_event():
     
     whisper = WhisperModel("small", device = "cpu", compute_type = "int16")
     
-    # cnn = keras.models.load_model("AnalyzationModel.h5")
+    # cnn = load_model("AnalyzationModel.h5")
 
 # /conversation_model 구축하기
 @app.post("/conversation_model")
