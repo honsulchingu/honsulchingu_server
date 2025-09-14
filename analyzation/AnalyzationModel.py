@@ -164,6 +164,20 @@ def judgement_generate(*, whisper, cnn, wav_bytes):
     
     return JUDGEMENT, SENTENCE
 
+# speak 구분하기
+def speak_separate(*, select_user):
+    SPEAK = {
+        "연인_김세희": "Sulafat",
+        "연인_도이안": "Zubenelgenubi",
+        "연인_송하린": "Leda",
+        "연인_이현우": "Puck",
+        "친구_류세진": "Umbriel",
+        "친구_이나경": "Laomedeia",
+        "친구_최민혁": "Orus",
+    }
+    
+    return SPEAK.get(select_user, "")
+
 # tts 생성하기
 def tts_generate(*, client, tts, speak_user, speak_ai, output_ai):
     generate_content_config = types.GenerateContentConfig(temperature = 1,
@@ -171,9 +185,7 @@ def tts_generate(*, client, tts, speak_user, speak_ai, output_ai):
                                                           speech_config = types.SpeechConfig(voice_config = types.VoiceConfig(prebuilt_voice_config = types.PrebuiltVoiceConfig(voice_name = speak_user))))
     
     contents = [types.Content(role = "user",
-                              parts = [types.Part.from_text(text = f"{speak_ai}: {output_ai}")])]
-    
-    print(f"{speak_ai}: {output_ai}")  # 수정사항 1 (1/5) print() 추가
+                              parts = [types.Part.from_text(text = f"{speak_ai}: {output_ai}")])]; print(f"{speak_ai}: {output_ai}")
     
     for chunk in client.models.generate_content_stream(
         model = tts,

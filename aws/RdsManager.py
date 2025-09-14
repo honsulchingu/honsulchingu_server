@@ -151,8 +151,8 @@ class RdsManager:
         return FAVORITE_COUNT
 
     # user 추가하기
-    def add_user_to_db(self, *, connection, cursor, email, nickname, image, startday, age, gender, table_name):
-        cursor.execute(f"INSERT INTO {table_name} (email, nickname, image, age, gender, startday) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), image = VALUES(image)", (email, nickname, image, age, gender, startday))
+    def add_user_to_db(self, *, connection, cursor, email, nickname, image, age, gender, startday, table_name):
+        cursor.execute(f"INSERT INTO {table_name} (email, nickname, image, age, gender, startday) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), image = VALUES(image), age = VALUES(age), gender = VALUES(gender)", (email, nickname, image, age, gender, startday))
         connection.commit()
 
     # user 삭제하기
@@ -209,16 +209,16 @@ class RdsManager:
 
     # judgement 불러오기
     def load_judgement_from_db(self, *, cursor, id_user, start_user, table_name):
-        cursor.execute(f"SELECT COUNT(judgement) FROM {table_name} WHERE id_user = %s AND start = %s", (id_user, start_user))
-        row = cursor.fetchone()
+        cursor.execute(f"SELECT COUNT(judgement) FROM {table_name} WHERE id_user = %s AND start = %s AND judgement <> ''", (id_user, start_user))
+        row = cursor.fetchone(); print(f"COUNT: {row[0]}")
         
         if row[0] == 0: return ""
         if row[0] % 20 != 0: return ""
         
-        cursor.execute(f"SELECT judgement FROM {table_name} WHERE id_user = %s AND start = %s ORDER BY time DESC LIMIT 10", (id_user, start_user))
+        cursor.execute(f"SELECT judgement FROM {table_name} WHERE id_user = %s AND start = %s AND judgement <> '' ORDER BY time DESC LIMIT 20", (id_user, start_user))
         rows = cursor.fetchall()
         
-        judgements = [row[0] for row in rows]
+        judgements = [row[0] for row in rows]; print(f"judgements: {judgements}")
         judgement = max(set(judgements), key = judgements.count)
         
         return judgement

@@ -5,7 +5,7 @@ from pydantic                           import BaseModel
 from fastapi                            import FastAPI, UploadFile, File, Form; app = FastAPI()
 from faster_whisper                     import WhisperModel
 from conversation.ConversationModel     import init_conversation, response_generate
-from analyzation.AnalyzationModel       import init_cnn, judgement_generate, tts_generate
+from analyzation.AnalyzationModel       import init_cnn, judgement_generate, tts_generate, speak_separate
 from aws.RdsManager                     import RdsManager
 
 # 공유변수 임시 선언하기
@@ -98,6 +98,12 @@ async def conversation_model(request: ConversationRequest):
     output_ai = CONTENTS[-1][0].parts[0].text
 
     time_ai = CONTENTS[-1][1]
+
+    # tts_ai = tts_generate(client            = client,
+    #                       tts               = TTS,
+    #                       speak_user        = speak_separate(select_user = request.select_user),
+    #                       speak_ai          = "(약간 빠르고, 약간 하이톤으로, 말끝은 길게)",
+    #                       output_ai         = output_ai)
     
     rds.save_contents_to_db(connection      = connection,
                             cursor          = cursor,
@@ -107,22 +113,24 @@ async def conversation_model(request: ConversationRequest):
                             CONTENTS        = CONTENTS,
                             table_name      = "contents_table")
     
-    return {"output_ai": output_ai, "time_ai": time_ai}
+    return {"output_ai": output_ai, "time_ai": time_ai} # , "tts_ai": tts_ai}
 
 # /analyzation_model 구축하기
 @app.post("/analyzation_model")
-async def analyzation_model(id_user:           str = Form(...),
-                            select_user:       str = Form(...),
-                            speak_user:        str = Form(...),
-                            time_user:         str = Form(...),
-                            start_user:        str = Form(...),
-                            wav_user:          UploadFile = File(...)):
+async def analyzation_model(id_user:            str = Form(...),
+                            select_user:        str = Form(...),
+                            speak_user:         str = Form(...),
+                            time_user:          str = Form(...),
+                            start_user:         str = Form(...),
+                            gender_user:        str = Form(...),
+                            wav_user:           UploadFile = File(...)):
+    
+    if "남성" in gender_user: cnn = cnn_men
+    if "여성" in gender_user: cnn = cnn_women; print(f"cnn: {cnn}")
     
     JUDGEMENT, SENTENCE = judgement_generate(whisper        = whisper,
-                                             cnn            = cnn_men, # 수정사항 3 (3/5) cnn_men 변경
-                                             wav_bytes      = await wav_user.read())
-    
-    print(f"JUDGEMENT: {JUDGEMENT}") # 수정사항 4 (4/5) print() 추가
+                                             cnn            = cnn,
+                                             wav_bytes      = await wav_user.read()); print(f"JUDGEMENT: {JUDGEMENT}")
     
     CONTENTS =  rds.load_contents_from_db(cursor            = cursor,
                                           id_user           = id_user,
@@ -133,9 +141,7 @@ async def analyzation_model(id_user:           str = Form(...),
     judgement = rds.load_judgement_from_db(cursor           = cursor,
                                            id_user          = id_user,
                                            start_user       = start_user,
-                                           table_name       = "contents_table")
-    
-    print(f"judgement: {judgement}") # 수정사항 5 (4/5) print() 추가
+                                           table_name       = "contents_table"); print(f"judgement: {judgement}")
     
     if not CONTENTS:
         PROMPT = rds.load_prompt_from_db(cursor             = cursor,
@@ -203,15 +209,13 @@ async def analyzation_model(id_user:           str = Form(...),
                                  shown_user                     = "true",
                                  CONTENTS                       = CONTENTS)
     
-    print(CONTENTS[-2][0].parts[0].text) # 수정사항 2 (2/5) print() 추가
+    output_ai = CONTENTS[-1][0].parts[0].text; print(f"SENTENCE: {SENTENCE}")
     
-    output_ai = CONTENTS[-1][0].parts[0].text
-    
-    tts_ai = tts_generate(client            = client,
-                          tts               = TTS,
-                          speak_user        = speak_user,
-                          speak_ai          = "(기본적으로 약간 빠르게 말하는 사람처럼)",
-                          output_ai         = output_ai)
+    # tts_ai = tts_generate(client            = client,
+    #                       tts               = TTS,
+    #                       speak_user        = speak_user,
+    #                       speak_ai          = "(약간 빠르고, 약간 하이톤으로, 말끝은 길게)",
+    #                       output_ai         = output_ai)
     
     rds.save_contents_to_db(connection      = connection,
                             cursor          = cursor,
@@ -229,7 +233,7 @@ async def analyzation_model(id_user:           str = Form(...),
                             judgement       = JUDGEMENT,
                             table_name      = "contents_table")
     
-    return {"output_ai": output_ai, "tts_ai": tts_ai}
+    return {"output_ai": output_ai} # , "tts_ai": tts_ai}
 
 # /load_setting 구축하기
 @app.post("/load_setting")
