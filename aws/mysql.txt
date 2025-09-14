@@ -10,6 +10,7 @@ CREATE TABLE contents_table (
     time            VARCHAR(30)         NOT NULL,
     start           VARCHAR(30)         NOT NULL,
     favorite        VARCHAR(30)         NOT NULL,
+    judgement       VARCHAR(10)         NOT NULL,
     shown           VARCHAR(10)         NOT NULL
 );
 
@@ -30,7 +31,7 @@ CREATE TABLE setting_table (
     tag_setting         TEXT            NOT NULL
 );
 
-INSERT INTO setting_table (key_setting, model_setting, type_setting, tts_setting, kakao_setting, google_setting, begin_setting, tag_setting) VALUES ('AIzaSyBtU0UnEGmH4ycd-VWDNQ4_N-J28731XdI', 'gemma-3-27b-it', 'text/plain', 'gemini-2.5-flash-preview-tts', '35cc80e065a4b7f207dc49058584b92d', 'google', '대화 시작의 한 마디', '지금까지의 대화를 3개의 키워드로 정리합니다. 대답은 ,로 구분한 3개의 키워드로 대답합니다.');
+INSERT INTO setting_table (key_setting, model_setting, type_setting, tts_setting, kakao_setting, google_setting, begin_setting, tag_setting) VALUES ('AIzaSyBtU0UnEGmH4ycd-VWDNQ4_N-J28731XdI', 'gemma-3-27b-it', 'text/plain', 'gemini-2.5-pro-preview-tts', '35cc80e065a4b7f207dc49058584b92d', 'google', '대화 시작의 한 마디', '지금까지의 대화를 3개의 키워드로 정리합니다. 대답은 ,로 구분한 3개의 키워드로 대답합니다.');
 
 select * from setting_table;
 

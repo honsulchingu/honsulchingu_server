@@ -17,11 +17,13 @@ def init_conversation(*, KEY, MODEL, TYPE):
 def response_generate(*, client, model, generate_content_config, input_user, time_user, shown_user, CONTENTS):
     CONTENTS.append((types.Content(role = "user",
                                    
-                                   parts = [types.Part.from_text(text=input_user)]),
+                                   parts = [types.Part.from_text(text = input_user)]),
                                    
                                    time_user,
                                    
-                                   "", # start_user (RdsManager의 save_contents_to_db 참고)
+                                   "", # favorite
+                                   
+                                   "", # judgement
                                    
                                    shown_user))
     
@@ -29,7 +31,7 @@ def response_generate(*, client, model, generate_content_config, input_user, tim
     
     for chunk in client.models.generate_content_stream(
         model = model,
-        contents = [content for content, _, _, _ in CONTENTS],
+        contents = [content for content, _, _, _, _ in CONTENTS],
         config = generate_content_config
     ):
         if chunk.text is not None:
@@ -37,11 +39,13 @@ def response_generate(*, client, model, generate_content_config, input_user, tim
     
     CONTENTS.append((types.Content(role = "model",
                                    
-                                   parts = [types.Part.from_text(text=response.strip())]),
+                                   parts = [types.Part.from_text(text = response.strip())]),
                                    
                                    datetime.now(timezone("Asia/Seoul")).strftime("%Y. %m. %d. %H-%M-%S"),
                                    
-                                   "", # start_user (RdsManager의 save_contents_to_db 참고)
+                                   "", # favorite
+                                   
+                                   "", # judgement
                                    
                                    shown_user))
     

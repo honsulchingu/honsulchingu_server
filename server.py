@@ -1,23 +1,20 @@
 # %%
 # .py3127_env\Scripts\activate && pip install uvicorn fastapi python-multipart faster-whisper tensorflow-cpu
-from gc                                 import collect
 from uvicorn                            import run
 from pydantic                           import BaseModel
-from fastapi                            import FastAPI, UploadFile, File, Form
+from fastapi                            import FastAPI, UploadFile, File, Form; app = FastAPI()
 from faster_whisper                     import WhisperModel
-from tensorflow.keras.models            import load_model
 from conversation.ConversationModel     import init_conversation, response_generate
-from analyzation.AnalyzationModel       import judgement_generate, tts_generate
-from aws.RdsManager                     import (init_db,        load_prompt_from_db,        save_contents_to_db,        load_chat_from_db,          add_user_to_db,             add_favorite_to_db,
-                                                close_db,       load_setting_from_db,       load_contents_from_db,      load_last_from_db,          delete_user_from_db,        delete_favorite_from_db,
-                                                                load_character_from_db,                                 delete_chat_from_db,        load_user_from_db,          load_favorite_from_db)
+from analyzation.AnalyzationModel       import init_cnn, judgement_generate, tts_generate
+from aws.RdsManager                     import RdsManager
 
 # 공유변수 임시 선언하기
 client                      = None
 model                       = None
 generate_content_config     = None
 whisper                     = None
-cnn                         = None
+cnn_men                     = None
+cnn_women                   = None
 TTS                         = None
 KAKAO                       = None
 GOOGLE                      = None
@@ -25,7 +22,7 @@ BEGIN                       = None
 TAG                         = None
 connection                  = None
 cursor                      = None
-app                         = FastAPI()
+rds                         = None
 
 # ConversationRequest 선언하기
 class ConversationRequest(BaseModel):
@@ -47,12 +44,14 @@ class ManagementRequest(BaseModel):
 # startup 구축하기
 @app.on_event("startup")
 async def startup_event():
-    global client, model, generate_content_config, whisper, cnn, TTS, KAKAO, GOOGLE, BEGIN, TAG, connection, cursor
+    global client, model, generate_content_config, whisper, cnn_men, cnn_women, TTS, KAKAO, GOOGLE, BEGIN, TAG, connection, cursor, rds
     
-    connection, cursor = init_db()
+    rds = RdsManager()
     
-    KEY, MODEL, TYPE, TTS, KAKAO, GOOGLE, BEGIN, TAG = load_setting_from_db(cursor          = cursor,
-                                                                            table_name      = "setting_table")
+    connection, cursor = rds.init_db()
+    
+    KEY, MODEL, TYPE, TTS, KAKAO, GOOGLE, BEGIN, TAG = rds.load_setting_from_db(cursor          = cursor,
+                                                                                table_name      = "setting_table")
     
     client, model, generate_content_config = init_conversation(KEY          = KEY,
                                                                MODEL        = MODEL,
@@ -60,21 +59,25 @@ async def startup_event():
     
     whisper = WhisperModel("small", device = "cpu", compute_type = "int16")
     
-    # cnn = load_model("AnalyzationModel.h5")
+    cnn_men = init_cnn()
+    cnn_men.load_weights("/home/ubuntu/honsulchingu_server/analyzation/cnn_men.weights.h5")
+    
+    cnn_women = init_cnn()
+    cnn_women.load_weights("/home/ubuntu/honsulchingu_server/analyzation/cnn_women.weights.h5")
 
 # /conversation_model 구축하기
 @app.post("/conversation_model")
 async def conversation_model(request: ConversationRequest):
-    CONTENTS = load_contents_from_db(cursor             = cursor,
-                                     id_user            = request.id_user,
-                                     select_user        = request.select_user,
-                                     start_user         = request.start_user,
-                                     table_name         = "contents_table")
+    CONTENTS = rds.load_contents_from_db(cursor             = cursor,
+                                         id_user            = request.id_user,
+                                         select_user        = request.select_user,
+                                         start_user         = request.start_user,
+                                         table_name         = "contents_table")
     
     if not CONTENTS:
-        PROMPT = load_prompt_from_db(cursor             = cursor,
-                                     select_user        = request.select_user,
-                                     table_name         = "prompt_table")
+        PROMPT = rds.load_prompt_from_db(cursor             = cursor,
+                                         select_user        = request.select_user,
+                                         table_name         = "prompt_table")
         
         CONTENTS = response_generate(client                         = client,
                                      model                          = model,
@@ -96,13 +99,13 @@ async def conversation_model(request: ConversationRequest):
 
     time_ai = CONTENTS[-1][1]
     
-    save_contents_to_db(connection      = connection,
-                        cursor          = cursor,
-                        id_user         = request.id_user,
-                        select_user     = request.select_user,
-                        start_user      = request.start_user,
-                        CONTENTS        = CONTENTS,
-                        table_name      = "contents_table")
+    rds.save_contents_to_db(connection      = connection,
+                            cursor          = cursor,
+                            id_user         = request.id_user,
+                            select_user     = request.select_user,
+                            start_user      = request.start_user,
+                            CONTENTS        = CONTENTS,
+                            table_name      = "contents_table")
     
     return {"output_ai": output_ai, "time_ai": time_ai}
 
@@ -116,19 +119,28 @@ async def analyzation_model(id_user:           str = Form(...),
                             wav_user:          UploadFile = File(...)):
     
     JUDGEMENT, SENTENCE = judgement_generate(whisper        = whisper,
-                                             cnn            = cnn,
+                                             cnn            = cnn_men, # 수정사항 3 (3/5) cnn_men 변경
                                              wav_bytes      = await wav_user.read())
     
-    CONTENTS = load_contents_from_db(cursor             = cursor,
-                                     id_user            = id_user,
-                                     select_user        = select_user,
-                                     start_user         = start_user,
-                                     table_name         = "contents_table")
+    print(f"JUDGEMENT: {JUDGEMENT}") # 수정사항 4 (4/5) print() 추가
+    
+    CONTENTS =  rds.load_contents_from_db(cursor            = cursor,
+                                          id_user           = id_user,
+                                          select_user       = select_user,
+                                          start_user        = start_user,
+                                          table_name        = "contents_table")
+    
+    judgement = rds.load_judgement_from_db(cursor           = cursor,
+                                           id_user          = id_user,
+                                           start_user       = start_user,
+                                           table_name       = "contents_table")
+    
+    print(f"judgement: {judgement}") # 수정사항 5 (4/5) print() 추가
     
     if not CONTENTS:
-        PROMPT = load_prompt_from_db(cursor             = cursor,
-                                     select_user        = select_user,
-                                     table_name         = "prompt_table")
+        PROMPT = rds.load_prompt_from_db(cursor             = cursor,
+                                         select_user        = select_user,
+                                         table_name         = "prompt_table")
         
         CONTENTS = response_generate(client                         = client,
                                      model                          = model,
@@ -138,7 +150,7 @@ async def analyzation_model(id_user:           str = Form(...),
                                      shown_user                     = "false",
                                      CONTENTS                       = [])
         
-    if JUDGEMENT == "0%":
+    if judgement == "0%":
         CONTENTS = response_generate(client                         = client,
                                      model                          = model,
                                      generate_content_config        = generate_content_config,
@@ -147,7 +159,7 @@ async def analyzation_model(id_user:           str = Form(...),
                                      shown_user                     = "false",
                                      CONTENTS                       = CONTENTS)
         
-    if JUDGEMENT == "25%":
+    if judgement == "25%":
         CONTENTS = response_generate(client                         = client,
                                      model                          = model,
                                      generate_content_config        = generate_content_config,
@@ -156,7 +168,7 @@ async def analyzation_model(id_user:           str = Form(...),
                                      shown_user                     = "false",
                                      CONTENTS                       = CONTENTS)
         
-    if JUDGEMENT == "50%":
+    if judgement == "50%":
         CONTENTS = response_generate(client                         = client,
                                      model                          = model,
                                      generate_content_config        = generate_content_config,
@@ -165,7 +177,7 @@ async def analyzation_model(id_user:           str = Form(...),
                                      shown_user                     = "false",
                                      CONTENTS                       = CONTENTS)
         
-    if JUDGEMENT == "75%":
+    if judgement == "75%":
         CONTENTS = response_generate(client                         = client,
                                      model                          = model,
                                      generate_content_config        = generate_content_config,
@@ -174,7 +186,7 @@ async def analyzation_model(id_user:           str = Form(...),
                                      shown_user                     = "false",
                                      CONTENTS                       = CONTENTS)
         
-    if JUDGEMENT == "100%":
+    if judgement == "100%":
         CONTENTS = response_generate(client                         = client,
                                      model                          = model,
                                      generate_content_config        = generate_content_config,
@@ -195,22 +207,29 @@ async def analyzation_model(id_user:           str = Form(...),
     
     output_ai = CONTENTS[-1][0].parts[0].text
     
-    # 수정사항 4 (4/5) 주석처리
-    # tts_ai = tts_generate(client            = client,
-    #                       tts               = TTS,
-    #                       speak_user        = speak_user,
-    #                       speak_ai          = "(이전의 대화를 기억하고 있는 사람처럼)", # 수정사항 3 (3/5) ( ) 추가
-    #                       output_ai         = output_ai)
+    tts_ai = tts_generate(client            = client,
+                          tts               = TTS,
+                          speak_user        = speak_user,
+                          speak_ai          = "(기본적으로 약간 빠르게 말하는 사람처럼)",
+                          output_ai         = output_ai)
     
-    save_contents_to_db(connection      = connection,
-                        cursor          = cursor,
-                        id_user         = id_user,
-                        select_user     = select_user,
-                        start_user      = start_user,
-                        CONTENTS        = CONTENTS,
-                        table_name      = "contents_table")
+    rds.save_contents_to_db(connection      = connection,
+                            cursor          = cursor,
+                            id_user         = id_user,
+                            select_user     = select_user,
+                            start_user      = start_user,
+                            CONTENTS        = CONTENTS,
+                            table_name      = "contents_table")
     
-    return {"output_ai": output_ai} # , "tts_ai": tts_ai} # 수정사항 5 (5/5) 주석처리
+    rds.add_judgement_to_db(connection      = connection,
+                            cursor          = cursor,
+                            role            = "user",
+                            id_user         = id_user,
+                            time_user       = time_user,
+                            judgement       = JUDGEMENT,
+                            table_name      = "contents_table")
+    
+    return {"output_ai": output_ai, "tts_ai": tts_ai}
 
 # /load_setting 구축하기
 @app.post("/load_setting")
@@ -220,51 +239,51 @@ async def load_setting():
 # /load_character 구축하기
 @app.post("/load_character")
 async def load_character():
-    CHARACTER = load_character_from_db(cursor           = cursor,
-                                       table_name       = "prompt_table")
+    CHARACTER = rds.load_character_from_db(cursor           = cursor,
+                                           table_name       = "prompt_table")
     
     return {"character": CHARACTER}
 
 # /load_last 구축하기
 @app.post("/load_last")
 async def load_last(request: ConversationRequest):
-    LAST = load_last_from_db(cursor         = cursor,
-                             id_user        = request.id_user,
-                             table_name     = "contents_table")
+    LAST = rds.load_last_from_db(cursor         = cursor,
+                                 id_user        = request.id_user,
+                                 table_name     = "contents_table")
     
     return {"last": LAST}
 
 # /load_chat 구축하기
 @app.post("/load_chat")
 async def load_chat(request: ConversationRequest):
-    CHAT = load_chat_from_db(cursor             = cursor,
-                             id_user            = request.id_user,
-                             select_user        = request.select_user,
-                             start_user         = request.start_user,
-                             table_name         = "contents_table")
+    CHAT = rds.load_chat_from_db(cursor             = cursor,
+                                 id_user            = request.id_user,
+                                 select_user        = request.select_user,
+                                 start_user         = request.start_user,
+                                 table_name         = "contents_table")
     
     return {"chat": CHAT}
 
 # /delete_chat 구축하기
 @app.post("/delete_chat")
 async def delete_chat(request: ConversationRequest):
-    FAVORITE_COUNT = delete_chat_from_db(connection         = connection,
-                                         cursor             = cursor,
-                                         id_user            = request.id_user,
-                                         select_user        = request.select_user,
-                                         start_user         = request.start_user,
-                                         table_name         = "contents_table")
+    FAVORITE_COUNT = rds.delete_chat_from_db(connection         = connection,
+                                             cursor             = cursor,
+                                             id_user            = request.id_user,
+                                             select_user        = request.select_user,
+                                             start_user         = request.start_user,
+                                             table_name         = "contents_table")
 
     return {"favorite_count": FAVORITE_COUNT}
 
 # /create_tag 구축하기
 @app.post("/create_tag")
 async def create_tag(request: ConversationRequest):
-    CONTENTS = load_contents_from_db(cursor             = cursor,
-                                     id_user            = request.id_user,
-                                     select_user        = request.select_user,
-                                     start_user         = request.start_user,
-                                     table_name         = "contents_table")
+    CONTENTS = rds.load_contents_from_db(cursor             = cursor,
+                                         id_user            = request.id_user,
+                                         select_user        = request.select_user,
+                                         start_user         = request.start_user,
+                                         table_name         = "contents_table")
     
     CONTENTS = response_generate(client                         = client,
                                  model                          = model,
@@ -281,59 +300,59 @@ async def create_tag(request: ConversationRequest):
 # /add_user 구축하기
 @app.post("/add_user")
 async def add_user(request: ManagementRequest):
-    add_user_to_db(connection       = connection,
-                   cursor           = cursor,
-                   email            = request.email,
-                   nickname         = request.nickname,
-                   image            = request.image,
-                   age              = request.age,
-                   gender           = request.gender,
-                   startday         = request.startday,
-                   table_name       = "user_table")
+    rds.add_user_to_db(connection       = connection,
+                       cursor           = cursor,
+                       email            = request.email,
+                       nickname         = request.nickname,
+                       image            = request.image,
+                       age              = request.age,
+                       gender           = request.gender,
+                       startday         = request.startday,
+                       table_name       = "user_table")
 
 # /delete_user 구축하기
 @app.post("/delete_user")
 async def delete_user(request: ManagementRequest):
-    delete_user_from_db(connection          = connection,
-                        cursor              = cursor,
-                        email               = request.email,
-                        table_name_1        = "contents_table",
-                        table_name_2        = "prompt_table",
-                        table_name_3        = "user_table")
+    rds.delete_user_from_db(connection          = connection,
+                            cursor              = cursor,
+                            email               = request.email,
+                            table_name_1        = "contents_table",
+                            table_name_2        = "prompt_table",
+                            table_name_3        = "user_table")
 
 # /load_user 구축하기
 @app.post("/load_user")
 async def load_user(request: ManagementRequest):
-    EMAIL, NICKNAME, IMAGE, AGE, GENDER, STARTDAY = load_user_from_db(cursor            = cursor,
-                                                                      email             = request.email,
-                                                                      table_name        = "user_table")
+    EMAIL, NICKNAME, IMAGE, AGE, GENDER, STARTDAY = rds.load_user_from_db(cursor            = cursor,
+                                                                          email             = request.email,
+                                                                          table_name        = "user_table")
     
     return {"email": EMAIL, "nickname": NICKNAME, "image": IMAGE, "age": AGE, "gender": GENDER, "startday": STARTDAY}
 
 # /add_favorite 구축하기
 @app.post("/add_favorite")
 async def add_favorite(request: ConversationRequest):
-    add_favorite_to_db(connection       = connection,
-                       cursor           = cursor,
-                       id_user          = request.id_user,
-                       time_user        = request.time_user,
-                       table_name       = "contents_table")
+    rds.add_favorite_to_db(connection       = connection,
+                           cursor           = cursor,
+                           id_user          = request.id_user,
+                           time_user        = request.time_user,
+                           table_name       = "contents_table")
 
 # /delete_favorite 구축하기
 @app.post("/delete_favorite")
 async def delete_favorite(request: ConversationRequest):
-    delete_favorite_from_db(connection       = connection,
-                            cursor           = cursor,
-                            id_user          = request.id_user,
-                            time_user        = request.time_user,
-                            table_name       = "contents_table")
+    rds.delete_favorite_from_db(connection      = connection,
+                                cursor          = cursor,
+                                id_user         = request.id_user,
+                                time_user       = request.time_user,
+                                table_name      = "contents_table")
 
 # /load_favorite 구축하기
 @app.post("/load_favorite")
 async def load_favorite(request: ConversationRequest):
-    FAVORITE = load_favorite_from_db(cursor           = cursor,
-                                     id_user          = request.id_user,
-                                     table_name       = "contents_table")
+    FAVORITE = rds.load_favorite_from_db(cursor         = cursor,
+                                         id_user        = request.id_user,
+                                         table_name     = "contents_table")
     
     return {"favorite": FAVORITE}
 
@@ -342,12 +361,12 @@ async def load_favorite(request: ConversationRequest):
 async def shutdown_event():
     global client, whisper, cnn, connection, cursor
     
-    close_db(connection     = connection,
-             cursor         = cursor)
+    rds.close_db(connection     = connection,
+                 cursor         = cursor)
     
     client, whisper, cnn, connection, cursor = None
     
-    collect()
+    from gc import collect; collect()
 
 # server 실행하기
 if __name__ == "__main__":

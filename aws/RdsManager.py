@@ -7,198 +7,225 @@ from datetime           import datetime
 from pytz               import timezone
 from dotenv             import load_dotenv
 
-# db 설정하기
-def init_db():
-    load_dotenv()
-    
-    host = environ.get("HOST")
-    user = environ.get("USER")
-    password = environ.get("PASSWORD")
-    database = environ.get("DATABASE")
-    
-    connection = connect(host=host, user=user, password=password, database=database, charset="utf8mb4")
-    cursor = connection.cursor()
-    
-    return connection, cursor
+# RdsManager 정의하기
+class RdsManager:
 
-# setting 불러오기
-def load_setting_from_db(*, cursor, table_name):
-    cursor.execute(f"SELECT key_setting, model_setting, type_setting, tts_setting, kakao_setting, google_setting, begin_setting, tag_setting FROM {table_name}")
-    row = cursor.fetchone()
-    
-    KEY, MODEL, TYPE, TTS, KAKAO, GOOGLE, BEGIN, TAG = row
-    
-    return KEY, MODEL, TYPE, TTS, KAKAO, GOOGLE, BEGIN, TAG
-
-# prompt 불러오기
-def load_prompt_from_db(*, cursor, select_user, table_name):
-    cursor.execute(f"SELECT prompt FROM {table_name} WHERE name = %s", (select_user))
-    row = cursor.fetchone()
-    
-    PROMPT = row[0]
-    
-    return PROMPT
-
-# contents 저장하기
-def save_contents_to_db(*, connection, cursor, id_user, select_user, start_user, CONTENTS, table_name):
-    cursor.execute(f"DELETE FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
-    connection.commit()
-    
-    for content in CONTENTS:
-        role = content[0].role
-        text = content[0].parts[0].text
-        time = content[1]
-        favorite = content[2]
-        shown = content[3]
-        cursor.execute(f"INSERT INTO {table_name} (id_user, select_user, role, text, time, start, favorite, shown) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (id_user, select_user, role, text, time, start_user, favorite, shown))
+    # db 설정하기
+    def init_db(self):
+        load_dotenv()
         
-    connection.commit()
+        host = environ.get("HOST")
+        user = environ.get("USER")
+        password = environ.get("PASSWORD")
+        database = environ.get("DATABASE")
+        
+        connection = connect(host = host, user = user, password = password, database = database, charset = "utf8mb4")
+        cursor = connection.cursor()
+        
+        return connection, cursor
 
-# contents 불러오기
-def load_contents_from_db(*, cursor, id_user, select_user, start_user, table_name):
-    cursor.execute(f"SELECT role, text, time, favorite, shown FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
-    rows = cursor.fetchall()
-    
-    CONTENTS = [
-        (
-            types.Content(
-                role = row[0],
-                
-                parts = [types.Part.from_text(text=row[1])]
-            ),
-            row[2],
+    # setting 불러오기
+    def load_setting_from_db(self, *, cursor, table_name):
+        cursor.execute(f"SELECT key_setting, model_setting, type_setting, tts_setting, kakao_setting, google_setting, begin_setting, tag_setting FROM {table_name}")
+        row = cursor.fetchone()
+        
+        KEY, MODEL, TYPE, TTS, KAKAO, GOOGLE, BEGIN, TAG = row
+        
+        return KEY, MODEL, TYPE, TTS, KAKAO, GOOGLE, BEGIN, TAG
+
+    # prompt 불러오기
+    def load_prompt_from_db(self, *, cursor, select_user, table_name):
+        cursor.execute(f"SELECT prompt FROM {table_name} WHERE name = %s", (select_user))
+        row = cursor.fetchone()
+        
+        PROMPT = row[0]
+        
+        return PROMPT
+
+    # contents 저장하기
+    def save_contents_to_db(self, *, connection, cursor, id_user, select_user, start_user, CONTENTS, table_name):
+        cursor.execute(f"DELETE FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
+        connection.commit()
+        
+        for content in CONTENTS:
+            role = content[0].role
+            text = content[0].parts[0].text
+            time = content[1]
+            favorite = content[2]
+            judgement = content[3]
+            shown = content[4]
+            cursor.execute(f"INSERT INTO {table_name} (id_user, select_user, role, text, time, start, favorite, judgement, shown) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)", (id_user, select_user, role, text, time, start_user, favorite, judgement, shown))
             
-            row[3],
+        connection.commit()
 
-            row[4]
-        )
-        for row in rows
-    ]
-    
-    return CONTENTS
+    # contents 불러오기
+    def load_contents_from_db(self, *, cursor, id_user, select_user, start_user, table_name):
+        cursor.execute(f"SELECT role, text, time, favorite, judgement, shown FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
+        rows = cursor.fetchall()
+        
+        CONTENTS = [
+            (
+                types.Content(
+                    role = row[0],
+                    
+                    parts = [types.Part.from_text(text = row[1])]
+                ),
+                row[2], # time_user
+                
+                row[3], # favorite
 
-# character 불러오기
-def load_character_from_db(*, cursor, table_name):
-    cursor.execute(f"SELECT name, speak, greet, tag, description, image FROM {table_name}")
-    rows = cursor.fetchall()
-    
-    CHARACTER = [
-        {
-            "name": row[0],
-            "speak": row[1],
-            "greet": row[2],
-            "tag": row[3],
-            "description": row[4],
-            "image": row[5]
-        }
-        for row in rows
-    ]
-    
-    return CHARACTER
+                row[4], # judgement
+                
+                row[5] # shown
+            )
+            for row in rows
+        ]
+        
+        return CONTENTS
 
-# last 불러오기
-def load_last_from_db(*, cursor, id_user, table_name):
-    cursor.execute(f"SELECT t1.select_user, t1.text, t1.time, t1.start, t1.favorite, p.image FROM {table_name} t1 JOIN (SELECT start, MAX(time) AS max_time FROM {table_name} WHERE id_user = %s AND shown = %s GROUP BY start) t2 ON t1.start = t2.start AND t1.time = t2.max_time LEFT JOIN prompt_table p ON t1.select_user = p.name WHERE t1.id_user = %s AND t1.shown = %s", (id_user, "true", id_user, "true"))
-    rows = cursor.fetchall()
-    
-    LAST = [
-        {
-            "select_user": row[0],
-            "text": row[1],
-            "time": row[2],
-            "start": row[3],
-            "favorite": row[4],
-            "image": row[5]
-        }
-        for row in rows
-    ]
-    
-    return LAST
+    # character 불러오기
+    def load_character_from_db(self, *, cursor, table_name):
+        cursor.execute(f"SELECT name, speak, greet, tag, description, image FROM {table_name}")
+        rows = cursor.fetchall()
+        
+        CHARACTER = [
+            {
+                "name": row[0],
+                "speak": row[1],
+                "greet": row[2],
+                "tag": row[3],
+                "description": row[4],
+                "image": row[5]
+            }
+            for row in rows
+        ]
+        
+        return CHARACTER
 
-# chat 불러오기
-def load_chat_from_db(*, cursor, id_user, select_user, start_user, table_name):
-    cursor.execute(f"SELECT role, text, time, favorite FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s AND shown = %s", (id_user, select_user, start_user, "true"))
-    rows = cursor.fetchall()
-    
-    CHAT = [
-        {
-            "role": row[0],
-            "text": row[1],
-            "time": row[2],
-            "favorite": row[3]
-        }
-        for row in rows[1:]
-    ]
-    
-    return CHAT
+    # last 불러오기
+    def load_last_from_db(self, *, cursor, id_user, table_name):
+        cursor.execute(f"SELECT t1.select_user, t1.text, t1.time, t1.start, t1.favorite, p.image FROM {table_name} t1 JOIN (SELECT start, MAX(time) AS max_time FROM {table_name} WHERE id_user = %s AND shown = %s GROUP BY start) t2 ON t1.start = t2.start AND t1.time = t2.max_time LEFT JOIN prompt_table p ON t1.select_user = p.name WHERE t1.id_user = %s AND t1.shown = %s", (id_user, "true", id_user, "true"))
+        rows = cursor.fetchall()
+        
+        LAST = [
+            {
+                "select_user": row[0],
+                "text": row[1],
+                "time": row[2],
+                "start": row[3],
+                "favorite": row[4],
+                "image": row[5]
+            }
+            for row in rows
+        ]
+        
+        return LAST
 
-# chat 삭제하기
-def delete_chat_from_db(*, connection, cursor, id_user, select_user, start_user, table_name):
-    cursor.execute(f"SELECT COUNT(*) FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s AND favorite != %s", (id_user, select_user, start_user, ""))
-    row = cursor.fetchone()
+    # chat 불러오기
+    def load_chat_from_db(self, *, cursor, id_user, select_user, start_user, table_name):
+        cursor.execute(f"SELECT role, text, time, favorite FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s AND shown = %s", (id_user, select_user, start_user, "true"))
+        rows = cursor.fetchall()
+        
+        CHAT = [
+            {
+                "role": row[0],
+                "text": row[1],
+                "time": row[2],
+                "favorite": row[3]
+            }
+            for row in rows[1:]
+        ]
+        
+        return CHAT
 
-    FAVORITE_COUNT = row[0]
+    # chat 삭제하기
+    def delete_chat_from_db(self, *, connection, cursor, id_user, select_user, start_user, table_name):
+        cursor.execute(f"SELECT COUNT(*) FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s AND favorite != %s", (id_user, select_user, start_user, ""))
+        row = cursor.fetchone()
+        
+        FAVORITE_COUNT = row[0]
+        
+        cursor.execute(f"DELETE FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
+        connection.commit()
+        
+        return FAVORITE_COUNT
 
-    cursor.execute(f"DELETE FROM {table_name} WHERE id_user = %s AND select_user = %s AND start = %s", (id_user, select_user, start_user))
-    connection.commit()
+    # user 추가하기
+    def add_user_to_db(self, *, connection, cursor, email, nickname, image, startday, age, gender, table_name):
+        cursor.execute(f"INSERT INTO {table_name} (email, nickname, image, age, gender, startday) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), image = VALUES(image)", (email, nickname, image, age, gender, startday))
+        connection.commit()
 
-    return FAVORITE_COUNT
+    # user 삭제하기
+    def delete_user_from_db(self, *, connection, cursor, email, table_name_1, table_name_2, table_name_3):
+        cursor.execute(f"DELETE FROM {table_name_1} WHERE id_user = %s", (email,))
+        cursor.execute(f"DELETE FROM {table_name_2} WHERE id_user = %s", (email,))
+        cursor.execute(f"DELETE FROM {table_name_3} WHERE email = %s", (email,))
+        connection.commit()
 
-# user 추가하기
-def add_user_to_db(*, connection, cursor, email, nickname, image, startday, age, gender, table_name):
-    cursor.execute(f"INSERT INTO {table_name} (email, nickname, image, age, gender, startday) VALUES (%s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), image = VALUES(image)", (email, nickname, image, age, gender, startday))
-    connection.commit()
+    # user 불러오기
+    def load_user_from_db(self, *, cursor, email, table_name):
+        cursor.execute(f"SELECT email, nickname, image, age, gender, startday FROM {table_name} WHERE email = %s", (email,))
+        row = cursor.fetchone()
+        
+        if not row: return "", "", "", "", "", ""
+        
+        EMAIL, NICKNAME, IMAGE, AGE, GENDER, STARTDAY = (v if v is not None else "" for v in row)
+        
+        return EMAIL, NICKNAME, IMAGE, AGE, GENDER, STARTDAY
 
-# user 삭제하기
-def delete_user_from_db(*, connection, cursor, email, table_name_1, table_name_2, table_name_3):
-    cursor.execute(f"DELETE FROM {table_name_1} WHERE id_user = %s", (email,))
-    cursor.execute(f"DELETE FROM {table_name_2} WHERE id_user = %s", (email,))
-    cursor.execute(f"DELETE FROM {table_name_3} WHERE email = %s", (email,))
-    connection.commit()
+    # favorite 추가하기
+    def add_favorite_to_db(self, *, connection, cursor, id_user, time_user, table_name):
+        cursor.execute(f"UPDATE {table_name} SET favorite = %s WHERE id_user = %s AND time = %s", (datetime.now(timezone("Asia/Seoul")).strftime("%Y. %m. %d. %H-%M-%S"), id_user, time_user))
+        connection.commit()
 
-# user 불러오기
-def load_user_from_db(*, cursor, email, table_name):
-    cursor.execute(f"SELECT email, nickname, image, age, gender, startday FROM {table_name} WHERE email = %s", (email,))
-    row = cursor.fetchone()
-    
-    if not row: return "", "", "", "", "", ""
-    
-    EMAIL, NICKNAME, IMAGE, AGE, GENDER, STARTDAY = (v if v is not None else "" for v in row)
-    
-    return EMAIL, NICKNAME, IMAGE, AGE, GENDER, STARTDAY
+    # favorite 삭제하기
+    def delete_favorite_from_db(self, *, connection, cursor, id_user, time_user, table_name):
+        cursor.execute(f"UPDATE {table_name} SET favorite = %s WHERE id_user = %s AND time = %s", ("", id_user, time_user))
+        connection.commit()
 
-# favorite 추가하기
-def add_favorite_to_db(*, connection, cursor, id_user, time_user, table_name):
-    cursor.execute(f"UPDATE {table_name} SET favorite = %s WHERE id_user = %s AND time = %s", (datetime.now(timezone("Asia/Seoul")).strftime("%Y. %m. %d. %H-%M-%S"), id_user, time_user))
-    connection.commit()
+    # favorite 불러오기
+    def load_favorite_from_db(self, *, cursor, id_user, table_name):
+        cursor.execute(f"SELECT t.select_user, t.text, t.time, t.start, t.favorite, p.image FROM {table_name} t LEFT JOIN prompt_table p ON t.select_user = p.name WHERE t.id_user = %s AND t.favorite != %s", (id_user, ""))
+        rows = cursor.fetchall()
+        
+        FAVORITE = [
+            {
+                "select_user": row[0],
+                "text": row[1],
+                "time": row[2],
+                "start": row[3],
+                "favorite": row[4],
+                "image": row[5]
+            }
+            for row in rows
+        ]
+        
+        return FAVORITE
 
-# favorite 삭제하기
-def delete_favorite_from_db(*, connection, cursor, id_user, time_user, table_name):
-    cursor.execute(f"UPDATE {table_name} SET favorite = %s WHERE id_user = %s AND time = %s", ("", id_user, time_user))
-    connection.commit()
+    # judgement 추가하기
+    def add_judgement_to_db(self, *, connection, cursor, role, id_user, time_user, judgement, table_name):
+        cursor.execute(f"UPDATE {table_name} SET judgement = %s WHERE role = %s AND id_user = %s AND time = %s", (judgement, role, id_user, time_user))
+        connection.commit()
 
-# favorite 불러오기
-def load_favorite_from_db(*, cursor, id_user, table_name):
-    cursor.execute(f"SELECT t.select_user, t.text, t.time, t.start, t.favorite, p.image FROM {table_name} t LEFT JOIN prompt_table p ON t.select_user = p.name WHERE t.id_user = %s AND t.favorite != %s", (id_user, ""))
-    rows = cursor.fetchall()
-    
-    FAVORITE = [
-        {
-            "select_user": row[0],
-            "text": row[1],
-            "time": row[2],
-            "start": row[3],
-            "favorite": row[4],
-            "image": row[5]
-        }
-        for row in rows
-    ]
-    
-    return FAVORITE
+    # judgement 불러오기
+    def load_judgement_from_db(self, *, cursor, id_user, start_user, table_name):
+        cursor.execute(f"SELECT COUNT(judgement) FROM {table_name} WHERE id_user = %s AND start = %s", (id_user, start_user))
+        row = cursor.fetchone()
+        
+        if row[0] == 0: return ""
+        if row[0] % 20 != 0: return ""
+        
+        cursor.execute(f"SELECT judgement FROM {table_name} WHERE id_user = %s AND start = %s ORDER BY time DESC LIMIT 10", (id_user, start_user))
+        rows = cursor.fetchall()
+        
+        judgements = [row[0] for row in rows]
+        judgement = max(set(judgements), key = judgements.count)
+        
+        return judgement
 
-# db 종료하기
-def close_db(*, connection, cursor):
-    cursor.close()
-    connection.close()
+    # db 종료하기
+    def close_db(self, *, connection, cursor):
+        cursor.close()
+        connection.close()
 
 # %%

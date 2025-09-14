@@ -1,20 +1,22 @@
 # %%
-# .py3127_env\Scripts\activate && pip install google-genai librosa tensorflow-cpu
-from io                                 import BytesIO
+# .py3127_env\Scripts\activate && pip install pydub google-genai librosa tensorflow-cpu
 from base64                             import b64encode
+from os                                 import listdir
+from io                                 import BytesIO
+from pydub                              import AudioSegment
 from google.genai                       import types
-from numpy                              import pad
+from numpy                              import pad, array, argmax, newaxis
 from struct                             import pack
 from librosa                            import load
 from librosa.feature                    import mfcc
 from sklearn.preprocessing              import scale
+from sklearn.model_selection            import train_test_split
 from tensorflow.keras.models            import Sequential
-from tensorflow.keras.layers            import Conv2D, BatchNormalization, MaxPooling2D
-from tensorflow.keras.layers            import Flatten, Dense, Dropout
+from tensorflow.keras.layers            import Conv2D, BatchNormalization, MaxPooling2D, Flatten, Dense, Dropout
 from tensorflow.keras.optimizers        import Adam
 
-# cnn 훈련하기 (0% 25% 50% 75% 100%, num_class = 5)
-def cnn_train(num_class = 5):
+# cnn 설정하기
+def init_cnn():
     model = Sequential([
         Conv2D(16, (3, 3), padding = "same", activation = "relu", input_shape = (100, 348, 1)),
         BatchNormalization(),
@@ -31,7 +33,7 @@ def cnn_train(num_class = 5):
         Flatten(),
         Dense(64, activation = "relu"),
         Dropout(0.3),
-        Dense(num_class, activation = "softmax")
+        Dense(5, activation = "softmax") # num_class = 5
     ])
     
     model.compile(
@@ -39,54 +41,126 @@ def cnn_train(num_class = 5):
         loss = "sparse_categorical_crossentropy",
         metrics = ["accuracy"]
     )
+
+    return model
+
+# cnn 훈련하기
+def cnn_train(path_name, model):
+    X = []
+    y = []
     
-    return 123
+    for file_name in listdir(path_name):
+        label_map = {"0": 0, # 0%
+                     "2": 1, # 25%
+                     "5": 2, # 50%
+                     "7": 3, # 75%
+                     "1": 4} # 100%
+        
+        label = label_map[file_name[0]]
+        
+        wav = BytesIO()
+        
+        AudioSegment.from_file(f"{path_name}\\{file_name}", format = "wav").export(wav, format = "wav")
+        
+        wav.seek(0)
+        
+        WAV, _ = load(wav, sr = 16000)
+        
+        mfccs = mfcc(y = WAV,
+                     sr = 16000,
+                     n_mfcc = 100,
+                     n_fft = 400,
+                     hop_length = 160)
+        
+        mfccs = scale(mfccs, axis = 1)
+        
+        padding_mfccs = pad(mfccs[:, :348], ((0, 0), (0, max(0, 348 - mfccs.shape[1]))), mode = "constant")
+        
+        X.append(padding_mfccs)
+        y.append(label)
+        
+    X = array(X)[..., newaxis]
+    y = array(y)
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 42, stratify = y)
+    
+    history = model.fit(X_train, y_train, validation_data = (X_test, y_test), epochs = 30, batch_size = 8)
+    
+    if "men" in path_name: model.save_weights("cnn_men.weights.h5")
+    if "women" in path_name: model.save_weights("cnn_women.weights.h5")
+    
+#     from matplotlib.pyplot import figure, subplot, plot, title, xlabel, ylabel, legend, show
+    
+#     figure(figsize = (12, 5))
+    
+#     # 정확도
+#     subplot(1, 2, 1)
+#     plot(history.history["accuracy"], label = "train acc")
+#     plot(history.history["val_accuracy"], label = "val acc")
+#     title("Accuracy")
+#     xlabel("Epoch")
+#     ylabel("Accuracy")
+#     legend()
+    
+#     # 손실
+#     subplot(1, 2, 2)
+#     plot(history.history["loss"], label="train loss")
+#     plot(history.history["val_loss"], label="val loss")
+#     title("Loss")
+#     xlabel("Epoch")
+#     ylabel("Loss")
+#     legend()
+    
+#     show()
+
+# cnn_train("wav_men", cnn_build())
+# cnn_train("wav_women", cnn_build())
 
 # cnn 예측하기
-def cnn_predict(*, mfccs):
+def cnn_predict(*, cnn, mfccs):
+    prediction = cnn.predict(mfccs[newaxis, ..., newaxis])
+    index = argmax(prediction, axis = 1)[0]
+    label = {0: "0%", 1: "25%", 2: "50%", 3: "75%", 4: "100%"}
+    JUDGEMENT = label[index]
     
-    return 123
+    return JUDGEMENT
 
 # judge 생성하기
 def judgement_generate(*, whisper, cnn, wav_bytes):
-    # import pydub
-    # wav_io = BytesIO()
-    # audio = pydub.AudioSegment.from_file(wav_bytes, format = "wav")
-    # audio.export(wav_io, format = "wav")
-    # wav_bytes = wav_io.getvalue()
-    
     WAV_BYTES = BytesIO(wav_bytes)
     
-    # WAV, _ = load(WAV_BYTES, sr = 16000)
+    WAV, _ = load(WAV_BYTES, sr = 16000)
     
-    # mfccs = mfcc(y = WAV,
-    #              sr = 16000,
-    #              n_mfcc = 100,
-    #              n_fft = 400,
-    #              hop_length = 160)
+    mfccs = mfcc(y = WAV,
+                 sr = 16000,
+                 n_mfcc = 100,
+                 n_fft = 400,
+                 hop_length = 160)
     
-    # mfccs = scale(mfccs, axis = 1)
+    mfccs = scale(mfccs, axis = 1)
     
-    # padding_mfccs = pad(mfccs[:, :348], ((0, 0), (0, max(0, 348 - mfccs.shape[1]))), mode = "constant")
+    padding_mfccs = pad(mfccs[:, :348], ((0, 0), (0, max(0, 348 - mfccs.shape[1]))), mode = "constant")
     
-    JUDGEMENT = "123" # cnn_predict(mfccs = padding_mfccs)
+    JUDGEMENT = cnn_predict(cnn = cnn, mfccs = padding_mfccs)
     
-    # segments, _ = whisper.transcribe(WAV_BYTES,
-    #                                  language = "ko",
-    #                                  task = "transcribe",
-    #                                  beam_size = 6,
-    #                                  vad_filter = True,
-    #                                  word_timestamps = False,
-    #                                  condition_on_previous_text = True)
+    WAV_BYTES.seek(0)
     
-    SENTENCE = "123" # "".join(segment.text for segment in segments).strip()
+    segments, _ = whisper.transcribe(WAV_BYTES,
+                                     language = "ko",
+                                     task = "transcribe",
+                                     beam_size = 6,
+                                     vad_filter = True,
+                                     word_timestamps = False,
+                                     condition_on_previous_text = True)
     
-    # sudo apt install ffmpeg -y
-    import pytz
-    import pydub
-    import datetime
-    audio = pydub.AudioSegment.from_file(WAV_BYTES, format = "wav")
-    audio.export(f"/home/ubuntu/honsulchingu_server/analyzation/wav/{datetime.datetime.now(pytz.timezone('Asia/Seoul')).strftime('%Y. %m. %d. %H-%M-%S')}.wav", format = "wav")
+    SENTENCE = "".join(segment.text for segment in segments).strip()
+    
+    # # sudo apt install ffmpeg -y
+    # import pytz
+    # import pydub
+    # import datetime
+    # audio = pydub.AudioSegment.from_file(WAV_BYTES, format = "wav")
+    # audio.export(f"/home/ubuntu/honsulchingu_server/analyzation/wav/{datetime.datetime.now(pytz.timezone('Asia/Seoul')).strftime('%Y. %m. %d. %H-%M-%S')}.wav", format = "wav")
     
     return JUDGEMENT, SENTENCE
 
