@@ -4,6 +4,7 @@ from uvicorn                            import run
 from pydantic                           import BaseModel
 from fastapi                            import FastAPI, UploadFile, File, Form; app = FastAPI()
 from faster_whisper                     import WhisperModel
+from tensorflow.keras.optimizers        import Adam
 from conversation.ConversationModel     import init_conversation, response_generate
 from analyzation.AnalyzationModel       import init_cnn, judgement_generate, tts_generate, speak_separate
 from aws.RdsManager                     import RdsManager
@@ -57,13 +58,13 @@ async def startup_event():
                                                                MODEL        = MODEL,
                                                                TYPE         = TYPE)
     
-    whisper = WhisperModel("small", device = "cpu", compute_type = "int16")
+    whisper = WhisperModel("base", device = "cpu", compute_type = "int16")
     
     cnn_men = init_cnn()
-    cnn_men.load_weights("/home/ubuntu/honsulchingu_server/analyzation/cnn_men.weights.h5")
+    cnn_men.load_weights("/home/ubuntu/honsulchingu_server/analyzation/cnn_men.weights.h5"); cnn_men.compile(optimizer = Adam(learning_rate = 1e-3), loss = "sparse_categorical_crossentropy", metrics = ["accuracy"])
     
     cnn_women = init_cnn()
-    cnn_women.load_weights("/home/ubuntu/honsulchingu_server/analyzation/cnn_women.weights.h5")
+    cnn_women.load_weights("/home/ubuntu/honsulchingu_server/analyzation/cnn_women.weights.h5"); cnn_women.compile(optimizer = Adam(learning_rate = 1e-3), loss = "sparse_categorical_crossentropy", metrics = ["accuracy"])
 
 # /conversation_model 구축하기
 @app.post("/conversation_model")
@@ -126,11 +127,11 @@ async def analyzation_model(id_user:            str = Form(...),
                             wav_user:           UploadFile = File(...)):
     
     if "남성" in gender_user: cnn = cnn_men
-    if "여성" in gender_user: cnn = cnn_women; print(f"cnn: {cnn}")
+    if "여성" in gender_user: cnn = cnn_women; print(f"<SV> cnn: {cnn}")
     
     JUDGEMENT, SENTENCE = judgement_generate(whisper        = whisper,
                                              cnn            = cnn,
-                                             wav_bytes      = await wav_user.read()); print(f"JUDGEMENT: {JUDGEMENT}")
+                                             wav_bytes      = await wav_user.read()); print(f"<SV> JUDGEMENT: {JUDGEMENT}")
     
     CONTENTS =  rds.load_contents_from_db(cursor            = cursor,
                                           id_user           = id_user,
@@ -141,7 +142,7 @@ async def analyzation_model(id_user:            str = Form(...),
     judgement = rds.load_judgement_from_db(cursor           = cursor,
                                            id_user          = id_user,
                                            start_user       = start_user,
-                                           table_name       = "contents_table"); print(f"judgement: {judgement}")
+                                           table_name       = "contents_table"); print(f"<SV> judgement: {judgement}")
     
     if not CONTENTS:
         PROMPT = rds.load_prompt_from_db(cursor             = cursor,
@@ -200,7 +201,7 @@ async def analyzation_model(id_user:            str = Form(...),
                                      time_user                      = time_user,
                                      shown_user                     = "false",
                                      CONTENTS                       = CONTENTS)
-        
+    
     CONTENTS = response_generate(client                         = client,
                                  model                          = model,
                                  generate_content_config        = generate_content_config,
@@ -209,7 +210,7 @@ async def analyzation_model(id_user:            str = Form(...),
                                  shown_user                     = "true",
                                  CONTENTS                       = CONTENTS)
     
-    output_ai = CONTENTS[-1][0].parts[0].text; print(f"SENTENCE: {SENTENCE}")
+    output_ai = CONTENTS[-1][0].parts[0].text; print(f"<SV> SENTENCE: {SENTENCE}")
     
     # tts_ai = tts_generate(client            = client,
     #                       tts               = TTS,
@@ -368,7 +369,7 @@ async def shutdown_event():
     rds.close_db(connection     = connection,
                  cursor         = cursor)
     
-    client, whisper, cnn, connection, cursor = None
+    client = whisper = cnn = connection = cursor = None
     
     from gc import collect; collect()
 

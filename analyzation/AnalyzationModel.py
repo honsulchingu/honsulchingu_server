@@ -5,20 +5,24 @@ from os                                 import listdir
 from io                                 import BytesIO
 from pydub                              import AudioSegment
 from google.genai                       import types
-from numpy                              import pad, array, argmax, newaxis
+from numpy                              import random, pad, array, argmax, newaxis
 from struct                             import pack
-from librosa                            import load
+from librosa                            import effects, load
 from librosa.feature                    import mfcc
 from sklearn.preprocessing              import scale
 from sklearn.model_selection            import train_test_split
+from tensorflow.keras                   import Input
 from tensorflow.keras.models            import Sequential
 from tensorflow.keras.layers            import Conv2D, BatchNormalization, MaxPooling2D, Flatten, Dense, Dropout
 from tensorflow.keras.optimizers        import Adam
+from tensorflow.keras.callbacks         import ModelCheckpoint
 
 # cnn 설정하기
 def init_cnn():
     model = Sequential([
-        Conv2D(16, (3, 3), padding = "same", activation = "relu", input_shape = (100, 348, 1)),
+        Input(shape = (100, 348, 1)),
+        
+        Conv2D(16, (3, 3), padding = "same", activation = "relu"),
         BatchNormalization(),
         MaxPooling2D((2, 2)),
         
@@ -33,19 +37,25 @@ def init_cnn():
         Flatten(),
         Dense(64, activation = "relu"),
         Dropout(0.3),
+
         Dense(5, activation = "softmax") # num_class = 5
     ])
-    
-    model.compile(
-        optimizer = Adam(learning_rate = 1e-3),
-        loss = "sparse_categorical_crossentropy",
-        metrics = ["accuracy"]
-    )
 
     return model
 
+# cnn 증강하기 (배속, 피치, 잡음)
+def cnn_argument(y, sr):
+    augmented = [y]
+    augmented.append(effects.time_stretch(y, rate = random.uniform(0.9, 1.1)))
+    augmented.append(effects.pitch_shift(y, sr = sr, n_steps = random.randint(-2, 3)))
+    augmented.append(y + 0.005 * random.randn(len(y)))
+    
+    return augmented
+
 # cnn 훈련하기
 def cnn_train(path_name, model):
+    model.compile(optimizer = Adam(learning_rate = 1e-3), loss = "sparse_categorical_crossentropy", metrics = ["accuracy"])
+    
     X = []
     y = []
     
@@ -56,7 +66,7 @@ def cnn_train(path_name, model):
                      "7": 3, # 75%
                      "1": 4} # 100%
         
-        label = label_map[file_name[0]]
+        label = label_map[file_name[1]]
         
         wav = BytesIO()
         
@@ -66,55 +76,66 @@ def cnn_train(path_name, model):
         
         WAV, _ = load(wav, sr = 16000)
         
-        mfccs = mfcc(y = WAV,
-                     sr = 16000,
-                     n_mfcc = 100,
-                     n_fft = 400,
-                     hop_length = 160)
+        if "women" in path_name:
+            WAV = effects.pitch_shift(WAV, sr = 16000, n_steps = random.randint(5, 7))
+            WAV = effects.time_stretch(WAV, rate = random.uniform(1.02, 1.05))
+            
+        WAVS = cnn_argument(WAV, 16000)
         
-        mfccs = scale(mfccs, axis = 1)
-        
-        padding_mfccs = pad(mfccs[:, :348], ((0, 0), (0, max(0, 348 - mfccs.shape[1]))), mode = "constant")
-        
-        X.append(padding_mfccs)
-        y.append(label)
-        
+        for WAV in WAVS:
+            mfccs = mfcc(y = WAV,
+                         sr = 16000,
+                         n_mfcc = 100,
+                         n_fft = 400,
+                         hop_length = 160)
+            
+            mfccs = scale(mfccs, axis = 1)
+            
+            padding_mfccs = pad(mfccs[:, :348], ((0, 0), (0, max(0, 348 - mfccs.shape[1]))), mode = "constant")
+            
+            X.append(padding_mfccs)
+            y.append(label)
+            
     X = array(X)[..., newaxis]
     y = array(y)
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.2, random_state = 42, stratify = y)
     
-    history = model.fit(X_train, y_train, validation_data = (X_test, y_test), epochs = 30, batch_size = 8)
+    if "women" in path_name:
+        checkpoint = ModelCheckpoint("cnn_women.weights.h5", save_weights_only = True, save_best_only = False, monitor = "val_loss")
+    else:
+        checkpoint = ModelCheckpoint("cnn_men.weights.h5", save_weights_only = True, save_best_only = False, monitor = "val_loss")
     
-    if "men" in path_name: model.save_weights("cnn_men.weights.h5")
-    if "women" in path_name: model.save_weights("cnn_women.weights.h5")
+    history = model.fit(X_train, y_train, validation_data = (X_test, y_test), epochs = 30, batch_size = 8, callbacks = [checkpoint])
     
-#     from matplotlib.pyplot import figure, subplot, plot, title, xlabel, ylabel, legend, show
+#     # (.py3127_env) pip install matplotlib
     
-#     figure(figsize = (12, 5))
+#     import matplotlib.pyplot as plt
+    
+#     plt.figure(figsize = (12, 5))
     
 #     # 정확도
-#     subplot(1, 2, 1)
-#     plot(history.history["accuracy"], label = "train acc")
-#     plot(history.history["val_accuracy"], label = "val acc")
-#     title("Accuracy")
-#     xlabel("Epoch")
-#     ylabel("Accuracy")
-#     legend()
+#     plt.subplot(1, 2, 1)
+#     plt.plot(history.history["accuracy"], label = "train acc")
+#     plt.plot(history.history["val_accuracy"], label = "val acc")
+#     plt.title("Accuracy")
+#     plt.xlabel("Epoch")
+#     plt.ylabel("Accuracy")
+#     plt.legend()
     
 #     # 손실
-#     subplot(1, 2, 2)
-#     plot(history.history["loss"], label="train loss")
-#     plot(history.history["val_loss"], label="val loss")
-#     title("Loss")
-#     xlabel("Epoch")
-#     ylabel("Loss")
-#     legend()
+#     plt.subplot(1, 2, 2)
+#     plt.plot(history.history["loss"], label="train loss")
+#     plt.plot(history.history["val_loss"], label="val loss")
+#     plt.title("Loss")
+#     plt.xlabel("Epoch")
+#     plt.ylabel("Loss")
+#     plt.legend()
     
-#     show()
+#     plt.show()
 
-# cnn_train("wav_men", cnn_build())
-# cnn_train("wav_women", cnn_build())
+# cnn_train("wav_men", init_cnn())
+# cnn_train("wav_women", init_cnn())
 
 # cnn 예측하기
 def cnn_predict(*, cnn, mfccs):
@@ -156,11 +177,10 @@ def judgement_generate(*, whisper, cnn, wav_bytes):
     SENTENCE = "".join(segment.text for segment in segments).strip()
     
     # # sudo apt install ffmpeg -y
-    # import pytz
-    # import pydub
-    # import datetime
-    # audio = pydub.AudioSegment.from_file(WAV_BYTES, format = "wav")
-    # audio.export(f"/home/ubuntu/honsulchingu_server/analyzation/wav/{datetime.datetime.now(pytz.timezone('Asia/Seoul')).strftime('%Y. %m. %d. %H-%M-%S')}.wav", format = "wav")
+    # from pytz import timezone
+    # from datetime import datetime
+    # audio = AudioSegment.from_file(WAV_BYTES, format = "wav")
+    # audio.export(f"/home/ubuntu/honsulchingu_server/analyzation/wav/{datetime.now(timezone('Asia/Seoul')).strftime('%Y. %m. %d. %H-%M-%S')}.wav", format = "wav")
     
     return JUDGEMENT, SENTENCE
 
@@ -185,7 +205,7 @@ def tts_generate(*, client, tts, speak_user, speak_ai, output_ai):
                                                           speech_config = types.SpeechConfig(voice_config = types.VoiceConfig(prebuilt_voice_config = types.PrebuiltVoiceConfig(voice_name = speak_user))))
     
     contents = [types.Content(role = "user",
-                              parts = [types.Part.from_text(text = f"{speak_ai}: {output_ai}")])]; print(f"{speak_ai}: {output_ai}")
+                              parts = [types.Part.from_text(text = f"{speak_ai}: {output_ai}")])]; print(f"<AM> {speak_ai}: {output_ai}")
     
     for chunk in client.models.generate_content_stream(
         model = tts,

@@ -210,15 +210,15 @@ class RdsManager:
     # judgement 불러오기
     def load_judgement_from_db(self, *, cursor, id_user, start_user, table_name):
         cursor.execute(f"SELECT COUNT(judgement) FROM {table_name} WHERE id_user = %s AND start = %s AND judgement <> ''", (id_user, start_user))
-        row = cursor.fetchone(); print(f"COUNT: {row[0]}")
+        row = cursor.fetchone(); print(f"<RM> COUNT: {row[0]}")
         
         if row[0] == 0: return ""
-        if row[0] % 20 != 0: return ""
+        if row[0] % 3 != 0: return ""
         
         cursor.execute(f"SELECT judgement FROM {table_name} WHERE id_user = %s AND start = %s AND judgement <> '' ORDER BY time DESC LIMIT 20", (id_user, start_user))
         rows = cursor.fetchall()
         
-        judgements = [row[0] for row in rows]; print(f"judgements: {judgements}")
+        judgements = [row[0] for row in rows]; print(f"<RM> judgements: {judgements}")
         judgement = max(set(judgements), key = judgements.count)
         
         return judgement

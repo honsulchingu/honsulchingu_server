@@ -25,7 +25,7 @@ def response_generate(*, client, model, generate_content_config, input_user, tim
                                    
                                    "", # judgement
                                    
-                                   shown_user)); print(f"input_user: {input_user}")
+                                   shown_user)); print(f"<CM> input_user: {input_user}")
     
     response = ""
     
@@ -47,7 +47,7 @@ def response_generate(*, client, model, generate_content_config, input_user, tim
                                    
                                    "", # judgement
                                    
-                                   shown_user)); print(f"response: {response.strip()}")
+                                   shown_user)); print(f"<CM> response: {response.strip()}")
     
     return CONTENTS
 

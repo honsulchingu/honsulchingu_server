@@ -1,11 +1,13 @@
 # 입장 전 (시스템파일 설치)
-20GB(gp3) 4GB(RAM) (t2.medium)
+15GB(gp3) 4GB(RAM) (t2.medium)
 
-$ip = "56.155.92.107"
+$ip = "13.208.121.37"
 
 ssh -i "C:\Users\Alps1\Downloads\honsulchingu.pem" "ubuntu@${ip}"
 
 scp -i "C:\Users\Alps1\Downloads\honsulchingu.pem" -r "C:\Users\Alps1\VSCodeProjects\honsulchingu\honsulchingu_server\analyzation" "C:\Users\Alps1\VSCodeProjects\honsulchingu\honsulchingu_server\aws" "C:\Users\Alps1\VSCodeProjects\honsulchingu\honsulchingu_server\conversation" "C:\Users\Alps1\VSCodeProjects\honsulchingu\honsulchingu_server\server.py" "ubuntu@${ip}:/home/ubuntu/honsulchingu_server" ; ssh -i "C:\Users\Alps1\Downloads\honsulchingu.pem" "ubuntu@${ip}"
+
+scp -i "C:\Users\Alps1\Downloads\honsulchingu.pem" -r "ubuntu@${ip}:/home/ubuntu/honsulchingu_server/analyzation/wav" "C:\Users\Alps1\Downloads"
 
 # 입장 후 (라이브러리 설치)
 sudo apt update
@@ -22,11 +24,13 @@ GRANT ALL PRIVILEGES ON dbhonsulchingu.* TO 'ubuntu'@'%';
 FLUSH PRIVILEGES;
 exit
 
+sudo apt install tmux -y
+sudo apt install ffmpeg -y
 sudo apt install python3-pip -y
 pip3 install uvicorn fastapi python-multipart faster-whisper tensorflow-cpu pydub google-genai librosa pymysql dotenv --break-system-packages
 logout
 
-sudo apt update && sudo apt list --upgradable && sudo apt upgrade -y && sudo apt list --upgradable && sudo apt-get install mysql-client -y && mysql -u admin -p12345678 -h dbhonsulchingu.cn0g02e6k9kl.ap-northeast-3.rds.amazonaws.com -e "SELECT user, host FROM mysql.user; CREATE USER IF NOT EXISTS 'ubuntu'@'%' IDENTIFIED BY '12345678'; GRANT ALL PRIVILEGES ON dbhonsulchingu.* TO 'ubuntu'@'%'; FLUSH PRIVILEGES;" && sudo apt install python3-pip -y && pip3 install uvicorn fastapi python-multipart faster-whisper tensorflow-cpu pydub google-genai librosa pymysql dotenv --break-system-packages && logout
+sudo apt update && sudo apt list --upgradable && sudo apt upgrade -y && sudo apt list --upgradable && sudo apt-get install mysql-client -y && mysql -u admin -p12345678 -h dbhonsulchingu.cn0g02e6k9kl.ap-northeast-3.rds.amazonaws.com -e "SELECT user, host FROM mysql.user; CREATE USER IF NOT EXISTS 'ubuntu'@'%' IDENTIFIED BY '12345678'; GRANT ALL PRIVILEGES ON dbhonsulchingu.* TO 'ubuntu'@'%'; FLUSH PRIVILEGES;" && sudo apt install tmux -y && sudo apt install ffmpeg -y && sudo apt install python3-pip -y && pip3 install uvicorn fastapi python-multipart faster-whisper tensorflow-cpu pydub google-genai librosa pymysql dotenv --break-system-packages && logout
 
 # 입장 중 (서버명령어 실행)
 python3 honsulchingu_server/server.py
@@ -37,10 +41,9 @@ lsof -i :8000
 python3 19771 ubuntu    7u  IPv4  66266      0t0  TCP *:8000 (LISTEN)
 kill -9 19771
 
-sudo apt install tmux
-tmux new -s honsulchingu_server
-tmux attach -t honsulchingu_server
+tmux new -s honsulchingu
+tmux attach -t honsulchingu
 python3 honsulchingu_server/server.py
-logout
-ctrl + c
-ctrl + d
+ctrl + b
+d
+ctrl + d (logout)
